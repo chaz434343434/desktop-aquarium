@@ -894,7 +894,8 @@ class Tank:
     def refresh_layers(self, t):
         """background + back plants + surface ripples, and the front plants, cached between redraws"""
         if (getattr(self, "_back", None) is not None and self._back.get_size() == self.static.get_size()
-                and self._layer_src is self.static and 0 <= t - self._layer_t < self.LAYER_EVERY):
+                and self._layer_src is self.static
+                and 0 <= t - self._layer_t < self.LAYER_EVERY * (4 if self.state["settings"].get("power") == "saver" else 1)):
             return
         self._layer_t = t
         self._layer_src = self.static

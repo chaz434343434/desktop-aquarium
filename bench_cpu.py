@@ -28,6 +28,8 @@ for sp in SPECIES[:20]:
 for t in TOYS[:30]:
     s["toys"][t["id"]] = dict(lv=3)
 s["settings"]["monitor"] = 2
+if len(sys.argv) > 3:
+    s["settings"]["power"] = sys.argv[3]
 tmp = tempfile.mkdtemp()
 save = os.path.join(tmp, "save.json")
 with open(save, "w") as fh:

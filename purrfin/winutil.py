@@ -28,6 +28,8 @@ SWP_FRAMECHANGED = 0x0020
 
 if IS_WIN:
     user32 = ctypes.windll.user32
+    user32.MonitorFromWindow.restype = ctypes.c_void_p
+    user32.MonitorFromWindow.argtypes = [wt.HWND, wt.DWORD]
     user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t
     user32.GetWindowLongPtrW.argtypes = [wt.HWND, ctypes.c_int]
     user32.SetWindowLongPtrW.restype = ctypes.c_ssize_t
@@ -196,3 +198,43 @@ def _mac_topmost(on):
                 w.setHidesOnDeactivate_(False)
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------- staying out of the way
+def set_low_priority():
+    """below-normal CPU priority: if the computer is busy, Chrome and schoolwork go first"""
+    try:
+        if IS_WIN:
+            ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x00004000)
+        else:
+            import os
+            os.nice(5)
+    except Exception:
+        pass
+
+
+def fullscreen_app_in_front(own=None):
+    """True while another program fills its whole monitor (a full-screen video, a game, slides).
+    The tank can barely be seen then, so the game slows right down."""
+    if not IS_WIN:
+        return False
+    try:
+        fg = user32.GetForegroundWindow()
+        if not fg or fg == own:
+            return False
+        cls = ctypes.create_unicode_buffer(64)
+        user32.GetClassNameW(fg, cls, 64)
+        if cls.value in ("Progman", "WorkerW", "Shell_TrayWnd"):        # the desktop / taskbar
+            return False
+        r = wt.RECT()
+        user32.GetWindowRect(fg, ctypes.byref(r))
+        mon = user32.MonitorFromWindow(fg, 2)
+        if own and user32.MonitorFromWindow(own, 2) != mon:      # it's on another screen: tank still visible
+            return False
+        mi = MONITORINFO()
+        mi.cbSize = ctypes.sizeof(MONITORINFO)
+        user32.GetMonitorInfoW(wt.HMONITOR(mon), ctypes.byref(mi))
+        m = mi.rcMonitor
+        return r.left <= m.left and r.top <= m.top and r.right >= m.right and r.bottom >= m.bottom
+    except Exception:
+        return False

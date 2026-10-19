@@ -13,16 +13,29 @@ import pygame  # noqa: E402
 from . import winutil  # noqa: E402
 from .game import Game  # noqa: E402
 
-FPS = 30           # while you're using it
-IDLE_FPS = 20      # just sitting on the desktop: fish still swim smoothly, less work for the computer
-HIDDEN_FPS = 8     # tank hidden with the _ button
+# frames per second:      using it, idle on the desktop
+FPS = {"normal": (30, 15), "saver": (20, 10)}
+HIDDEN_FPS = 6     # tank hidden with the _ button
+COVERED_FPS = 4    # another program is full screen in front (video, slides, a game)
 
 
-def pick_fps(g):
-    if g.minimized:
-        return HIDDEN_FPS
-    busy = g.mouse_low is not None or g.ui.mouse is not None or g.ui.panel or g.now - g.last_input < 3
-    return FPS if busy else IDLE_FPS
+class Pacer:
+    def __init__(self):
+        self.covered = False
+        self.check_t = 0.0
+
+    def fps(self, g, dt):
+        self.check_t -= dt
+        if self.check_t <= 0:                        # asking Windows is cheap, but once a second is plenty
+            self.check_t = 1.0
+            self.covered = winutil.fullscreen_app_in_front(g.hwnd)
+        if g.minimized:
+            return HIDDEN_FPS
+        if self.covered:
+            return COVERED_FPS
+        active, idle = FPS.get(g.state["settings"].get("power", "normal"), FPS["normal"])
+        busy = g.mouse_low is not None or g.ui.mouse is not None or g.ui.panel or g.now - g.last_input < 3
+        return active if busy else idle
 
 
 def run_script(g, t, shots, shot_dir, state):
@@ -90,6 +103,7 @@ def main(argv=None):
 
     prev_fg = winutil.foreground()
     winutil.set_dpi_aware()
+    winutil.set_low_priority()
     pygame.mixer.pre_init(22050, -16, 1, 512)
     pygame.init()
     g = Game(save_path=args.save, monitor=args.monitor, fresh=args.fresh)
@@ -114,12 +128,14 @@ def main(argv=None):
     if prev_fg:
         winutil.restore_foreground(prev_fg)
     clock = pygame.time.Clock()
+    pacer = Pacer()
+    dt = 0.0
     t = 0.0
     script = {}
     if args.shots:
         os.makedirs(args.shots, exist_ok=True)
     while g.running:
-        dt = min(0.15, clock.tick(pick_fps(g)) / 1000)
+        dt = min(0.3, clock.tick(pacer.fps(g, dt)) / 1000)
         t += dt
         for e in pygame.event.get():
             if e.type == pygame.QUIT:

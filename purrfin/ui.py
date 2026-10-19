@@ -1245,6 +1245,12 @@ class UI:
         sb(X + 86, 80, "Off", lambda: g.change_setting("nametags", False), not st.get("nametags", True))
         self.text(scr, "(names you give show above your fish)", self.f_small, DIM, (X + 182, y + 6))
         y += 36
+        label("Performance")
+        pw = st.get("power", "normal")
+        sb(X, 80, "Normal", lambda: g.change_setting("power", "normal"), pw != "saver")
+        sb(X + 86, 130, "Battery saver", lambda: g.change_setting("power", "saver"), pw == "saver")
+        self.text(scr, "(saver: calmer animation, lighter on old laptops)", self.f_small, DIM, (X + 226, y + 6))
+        y += 36
         label("Day & night")
         sb(X, 80, "Clock", lambda: g.change_setting("daynight", True), st.get("daynight", True))
         sb(X + 86, 110, "Always day", lambda: g.change_setting("daynight", False), not st.get("daynight", True))
