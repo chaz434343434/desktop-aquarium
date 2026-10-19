@@ -75,6 +75,7 @@ def main(argv=None):
     ap.add_argument("--fresh", action="store_true", help="ignore existing save")
     ap.add_argument("--seconds", type=float, default=0, help="auto-quit after N seconds (testing)")
     ap.add_argument("--shots", default=None, help="run UI smoke script and save screenshots here")
+    ap.add_argument("--script", action="store_true", help="run the UI smoke script without screenshots")
     ap.add_argument("--demo", action="store_true", help="give a pile of scales and fish (testing)")
     args = ap.parse_args(argv)
 
@@ -131,7 +132,7 @@ def main(argv=None):
                 g.text_input(e.text)
         g.update(dt)
         g.draw()
-        if args.shots:
+        if args.shots or args.script:
             run_script(g, t, None, args.shots, script)
         pygame.display.flip()
         if args.seconds and t >= args.seconds:
