@@ -1,0 +1,47 @@
+# Experiments for the Apple Silicon build (run by hand). Builds a few variants and runs each one.
+name: Mac debug
+
+on:
+  workflow_dispatch:
+
+jobs:
+  variant:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: baseline
+            py: "3.11"
+            pip: pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
+            extra: ""
+          - name: no-pyobjc
+            py: "3.11"
+            pip: pygame==2.6.1 pyinstaller pillow
+            extra: ""
+          - name: py312
+            py: "3.12"
+            pip: pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
+            extra: ""
+          - name: no-sound
+            py: "3.11"
+            pip: pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
+            extra: "SDL_AUDIODRIVER=dummy"
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py }}
+      - run: pip install ${{ matrix.pip }}
+      - name: Build
+        run: |
+          python -m PyInstaller --noconfirm --windowed --onedir --name "Desktop Aquarium" \
+            --exclude-module numpy --exclude-module tkinter --exclude-module matplotlib DesktopAquarium.pyw > build.log 2>&1 || { tail -50 build.log; exit 1; }
+          grep -i "warn\|error" build.log | grep -iv "hidden import\|ignoring\|library not found" | tail -20 || true
+          codesign --force --deep --sign - "dist/Desktop Aquarium.app"
+          ls "dist/Desktop Aquarium.app/Contents/Frameworks" | head -80
+      - name: Run
+        run: |
+          export ${{ matrix.extra }} DA_FAULTLOG=$PWD/fault.txt DA_UPDATE_API=http://127.0.0.1:9/x
+          "dist/Desktop Aquarium.app/Contents/MacOS/Desktop Aquarium" --fresh --seconds 8 --save $PWD/s.json; echo "EXIT $?"
+          echo "---- fault log"; cat fault.txt || true

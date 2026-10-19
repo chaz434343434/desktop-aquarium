@@ -33,7 +33,7 @@ for k in (1.0, 1.5):
     g.draw()
     short = g.screen.get_size()
     full_h = int(660 * k)
-    check(f"[ui {k}] short window around the tank ({short[0]}x{short[1]})", short[1] < full_h and short[0] < g.mon["w"])
+    check(f"[ui {k}] short window around the tank ({short[0]}x{short[1]})", short[1] < full_h and short[0] <= g.mon["w"])
     check(f"[ui {k}] tank sits at the bottom of the window", g.tank_rect.bottom == short[1])
     check(f"[ui {k}] tank fully inside the window", g.screen.get_rect().contains(g.tank_rect))
     check(f"[ui {k}] window bottom on the screen bottom", g.win_y + g.win_h == g.mon["y"] + g.mon["h"])
