@@ -39,8 +39,7 @@ if not ok:
         txt = open(rep, errors="replace").read()
         try:
             import json
-            head, body = txt.split("
-", 1)
+            head, body = txt.split(chr(10), 1)
             d = json.loads(body)
             print("exception:", d.get("exception"), "| termination:", d.get("termination", {}).get("indicator"))
             th = next(t for t in d["threads"] if t.get("triggered"))
