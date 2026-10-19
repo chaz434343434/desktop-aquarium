@@ -1,0 +1,19 @@
+DESKTOP AQUARIUM FOR MAC
+
+1. Drag "Desktop Aquarium" onto the Applications folder (in this window).
+
+2. Open it from Applications. The first time, macOS says it can't check the app
+   for malware, because it isn't from the App Store. That's normal for a homemade game.
+   Click "Done" (not "Move to Trash"), then:
+
+     - Open System Settings > Privacy & Security
+     - Scroll down to "Desktop Aquarium was blocked..."
+     - Click "Open Anyway" and type your Mac password
+
+   (On older macOS you can instead right-click the app > Open > Open.)
+   You only need to do this once.
+
+3. The tank sits at the bottom-right of your screen, above the Dock.
+   Updates install themselves from inside the game (Options > Check for updates).
+
+Your save lives in ~/Library/Application Support/DesktopAquarium/

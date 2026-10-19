@@ -1,0 +1,27 @@
+﻿VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 4, 0, 0),
+    prodvers=(1, 4, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable(
+        '040904B0',
+        [StringStruct('CompanyName', 'Desktop Aquarium'),
+         StringStruct('FileDescription', 'Desktop Aquarium - a cozy catfish aquarium for your desktop'),
+         StringStruct('FileVersion', '1.4.0'),
+         StringStruct('InternalName', 'DesktopAquarium'),
+         StringStruct('LegalCopyright', 'Made for a catfish-loving teacher'),
+         StringStruct('OriginalFilename', 'DesktopAquarium.exe'),
+         StringStruct('ProductName', 'Desktop Aquarium'),
+         StringStruct('ProductVersion', '1.4.0')])
+    ]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)

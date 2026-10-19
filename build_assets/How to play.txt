@@ -1,0 +1,68 @@
+DESKTOP AQUARIUM  (version 1.4.0)
+A cozy catfish aquarium that lives at the bottom of your screen.
+
+STARTING IT
+  Double-click DesktopAquarium.exe (keep it in this folder with the _internal folder).
+  If Windows shows "Windows protected your PC", click "More info" then "Run anyway".
+  That warning shows up for any small homemade program that isn't from a big company.
+
+THE BASICS
+  - Click a catfish to pet it. You get scales (the money), and it gets happier.
+  - Pop the floating bubbles. Golden ones are worth 10x.
+  - Feed your fish with the food buttons next to your scales.
+  - Open the Shop to buy new catfish, toys, upgrades and tank themes.
+  - Fish play with toys and shed scales when they do.
+  - Hover over a fish to see how it's doing.
+  - Belly Rubs (Shop > Upgrades) gives you a Rub! button. Press it, then hold the mouse down on
+    your fish and wiggle: every rub pays! Lasts 3 seconds, +1 second per level (up to 15),
+    then your hands need a minute's rest.
+  - Right-click a fish to give it a name. To take a name off, right-click it again and
+    press "Remove name" (or save an empty name).
+
+WHEN YOU COME BACK
+  - Build the Scale Jar (Shop > Upgrades). It fills up while you're away. Click it to collect.
+  - Build the Hatchery and lay eggs (free). Their timers keep going even when the game is closed. When they hatch, every fish grows - and sometimes
+    a baby catfish hatches too! It starts as a tiny fry and grows up over a few minutes. Small Eggs can also hatch nothing at all.
+  - If a baby hatches and your tank is full, you must sell a fish (or the baby) to continue.
+  - Golden Eggs are 5x as likely to hatch a SHINY baby.
+  - Golden bubbles and visitors sometimes drop a Mystery Egg. Lay it and see what hatches!
+  - The Auto-Nest upgrade lays your eggs again for you after they hatch. Switch it off in the
+    Hatchery tab to pick different eggs, or press the x on an egg to take it out of the nest.
+  - The Hatchery and My Tank buttons (next to Shop) jump straight to those tabs.
+  - Look out for visitors (a crab, a shrimp, a turtle... even an axolotl). Click them for a gift.
+  - The gold "Collect !" button grabs everything that's ready at once.
+  - Drag the Scale Jar, the egg nest and the toys to move them around.
+
+HOLIDAY SPECIALS
+  - Some things are only for sale during a holiday (by your computer's date).
+    Halloween (October 1 - November 2): the Haunted Lagoon theme and the Pumpkin Catfish.
+  - The Haunted Lagoon has gravestones, glowing jack-o'-lanterns and a friendly ghost.
+    Its pop-bubbles are skulls worth 2x, and it gives +10% scales forever.
+  - The Pumpkin Catfish earns twice as much as your best catfish and blows skull bubbles
+    worth 3x. One per tank.
+  - Once you've bought them, they're yours: the theme stays, and the Pumpkin Catfish can be
+    bought again after a Spawning Season, any time of year.
+
+THE LONG GAME
+  - Later on, Shop > Pearls lets you start a new Spawning Season. You lose your fish and
+    upgrades, but earn Pearls.
+  - Spend Pearls in the Pearl Tree for bonuses that last forever: more scales, faster eggs,
+    a head start, luckier bubbles and more.
+  - There are 40 catfish to collect. After the Moonlight Catfish, giant river catfish and
+    mythical ones (Aurora, Galaxy) appear, along with late-game toys and upgrades that unlock
+    as your tank gets richer.
+
+GOOD TO KNOW
+  - It never steals your keyboard or mouse from other programs, so it can sit there all day.
+  - Clicks on the empty space around the tank go straight through to whatever is behind it.
+    (On a Mac the tank sits in its own small window instead, which grows while the shop is open.)
+  - "Chill" pauses hunger and happiness if you just want to watch.
+  - Options lets you change the tank size, position, brightness, monitor, sound and more.
+  - Text too small? Options > UI size makes all the buttons and text 150% or 200% bigger.
+  - Drag the dotted bar at the top of the Shop/Fishdex to move it.
+  - The game saves by itself. Click the red x on the tank to save and close.
+  - Updates: when a new version is out, an "Update!" button appears. Click it and the game
+    updates itself and reopens. Your fish are kept.
+    You can also check any time: Options > Updates > "Check for updates".
+
+Have fun, and happy fishkeeping!

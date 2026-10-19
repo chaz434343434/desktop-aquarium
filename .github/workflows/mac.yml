@@ -1,0 +1,67 @@
+# Builds the Mac version on GitHub's Macs (one per chip), tests it, and attaches the .dmg files
+# to the release. Runs by itself whenever a release is published; can also be run by hand
+# (Actions tab > Mac build > Run workflow) to just build + test without touching a release.
+name: Mac build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14          # Apple Silicon (M1 and newer)
+            arch: arm64
+          - runner: macos-15-intel    # older Intel Macs
+            arch: intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: pip install pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
+
+      - name: Game tests (no window)
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: |
+          for t in test_*.py; do
+            case "$t" in test_update_e2e.py|test_update_mac_e2e.py) continue;; esac
+            echo "== $t"; python "$t" || { echo "FAILED: $t"; exit 1; }
+          done
+
+      - name: Build app + dmg
+        run: sh build_assets/build_mac.sh
+
+      - name: Smoke test with a real window
+        run: python build_assets/mac_smoke.py out/shots
+
+      - name: Self-update test
+        run: python test_update_mac_e2e.py out/*.dmg
+
+      - name: Keep the build and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-${{ matrix.arch }}
+          path: out/
+
+      - name: Attach the dmg to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" out/*.dmg --clobber --repo "${{ github.repository }}"
