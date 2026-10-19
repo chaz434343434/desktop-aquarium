@@ -10,29 +10,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: baseline
-            py: "3.11"
-            pip: pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
-            extra: ""
-          - name: no-pyobjc
-            py: "3.11"
-            pip: pygame==2.6.1 pyinstaller pillow
-            extra: ""
-          - name: py312
-            py: "3.12"
-            pip: pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
-            extra: ""
-          - name: no-sound
-            py: "3.11"
-            pip: pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
-            extra: "SDL_AUDIODRIVER=dummy"
+          - name: demo
+            args: --demo
+          - name: shots-png
+            args: --shots shots
+          - name: shots-bmp
+            args: --shots shots
+            extra: DA_SHOT_EXT=bmp
+          - name: demo-shots-bmp
+            args: --demo --shots shots
+            extra: DA_SHOT_EXT=bmp
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.py }}
-      - run: pip install ${{ matrix.pip }}
+          python-version: "3.11"
+      - run: pip install pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
       - name: Build
         run: |
           python -m PyInstaller --noconfirm --windowed --onedir --name "Desktop Aquarium" \
@@ -43,5 +37,5 @@ jobs:
       - name: Run
         run: |
           export ${{ matrix.extra }} DA_FAULTLOG=$PWD/fault.txt DA_UPDATE_API=http://127.0.0.1:9/x
-          "dist/Desktop Aquarium.app/Contents/MacOS/Desktop Aquarium" --fresh --seconds 8 --save $PWD/s.json; echo "EXIT $?"
+          "dist/Desktop Aquarium.app/Contents/MacOS/Desktop Aquarium" --fresh --seconds 14 --save $PWD/s.json ${{ matrix.args }}; echo "EXIT $?"; echo "shots: $(ls shots 2>/dev/null | xargs)"
           echo "---- fault log"; cat fault.txt || true

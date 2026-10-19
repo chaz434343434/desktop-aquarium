@@ -38,7 +38,8 @@ def run_script(g, t, shots, shot_dir, state):
     while steps and steps[0][0] <= t:
         _, kind, arg = steps.pop(0)
         if kind == "shot" and shot_dir:
-            pygame.image.save(g.screen, os.path.join(shot_dir, f"{arg}.png"))
+            ext = os.environ.get("DA_SHOT_EXT", "png")       # tests can pick bmp
+            pygame.image.save(g.screen, os.path.join(shot_dir, f"{arg}.{ext}"))
         elif kind == "open":
             g.ui.panel, tab = arg
             if tab:
