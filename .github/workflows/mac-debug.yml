@@ -1,25 +1,16 @@
-# Experiments for the Apple Silicon build (run by hand): the real build script with parts
-# switched off, then the real smoke test.
+# Experiments for the Apple Silicon build (run by hand): one real build, launched different ways.
 name: Mac debug
 
 on:
   workflow_dispatch:
 
 jobs:
-  variant:
+  launch:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: full
-            env: DA_X=1
-          - name: no-icon
-            env: DA_NO_ICON=1
-          - name: no-bundle-id
-            env: DA_NO_BID=1
-          - name: no-plist
-            env: DA_NO_PLIST=1
-    runs-on: macos-14
+        runner: [macos-14, macos-15]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,9 +18,17 @@ jobs:
           python-version: "3.11"
       - run: pip install pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
       - name: Build
-        run: export ${{ matrix.env }}; sh build_assets/build_mac.sh > build.log 2>&1 || { tail -40 build.log; exit 1; }
-      - name: Smoke
+        run: sh build_assets/build_mac.sh > build.log 2>&1 || { tail -40 build.log; exit 1; }
+      - name: Launch variants
         run: |
-          export DA_FAULTLOG=$PWD/fault.txt
-          python build_assets/mac_smoke.py out/shots 2>&1 | grep -v "^   " | head -20 || true
-          echo "---- fault log"; cat fault.txt || true
+          EXE="dist/Desktop Aquarium.app/Contents/MacOS/Desktop Aquarium"
+          export DA_UPDATE_API=http://127.0.0.1:9/x
+          run() { echo "== $1"; shift; "$@"; echo "EXIT $?"; }
+          run "bash: plain 6s" "$EXE" --fresh --seconds 6 --save /tmp/a.json
+          run "bash: demo 6s" "$EXE" --fresh --demo --seconds 6 --save /tmp/b.json
+          run "bash: smoke args" "$EXE" --fresh --demo --save /tmp/c.json --seconds 6 --shots /tmp/shots1
+          run "python popen: plain" python -c "import subprocess,sys; sys.exit(subprocess.call([sys.argv[1], '--fresh', '--seconds', '6', '--save', '/tmp/d.json']))" "$EXE"
+          run "python popen: demo" python -c "import subprocess,sys; sys.exit(subprocess.call([sys.argv[1], '--fresh', '--demo', '--seconds', '6', '--save', '/tmp/e.json']))" "$EXE"
+          run "open -W (like Finder)" open -W -n "dist/Desktop Aquarium.app" --args --fresh --seconds 6 --save /tmp/f.json
+          ls -la /tmp/*.json
+          true
