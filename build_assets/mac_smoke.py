@@ -25,5 +25,30 @@ ok = code == 0 and os.path.exists(save)
 got = sorted(os.listdir(os.path.join(shots, "game"))) if os.path.isdir(os.path.join(shots, "game")) else []
 print("exit code", code, "| save written", os.path.exists(save), "| game shots", got)
 ok &= len(got) >= 8
+if not ok:
+    # find out why: the same game from source with Python's crash tracer, and macOS's crash report
+    print("---- source run with faulthandler")
+    r = subprocess.run([sys.executable, "-X", "faulthandler", "-m", "purrfin.main", "--fresh", "--seconds", "5",
+                        "--save", save + ".src"], env=env, capture_output=True, text=True, timeout=120)
+    print("exit", r.returncode)
+    print((r.stdout + r.stderr)[-4000:])
+    import glob
+    reps = sorted(glob.glob(os.path.expanduser("~/Library/Logs/DiagnosticReports/*.ips")), key=os.path.getmtime)
+    for rep in reps[-2:]:
+        print("---- crash report", rep)
+        txt = open(rep, errors="replace").read()
+        try:
+            import json
+            head, body = txt.split("
+", 1)
+            d = json.loads(body)
+            print("exception:", d.get("exception"), "| termination:", d.get("termination", {}).get("indicator"))
+            th = next(t for t in d["threads"] if t.get("triggered"))
+            imgs = d.get("usedImages", [])
+            for fr in th["frames"][:25]:
+                im = imgs[fr["imageIndex"]].get("name", "?") if fr.get("imageIndex") is not None else "?"
+                print("  ", im, fr.get("symbol", hex(fr.get("imageOffset", 0))))
+        except Exception as e:
+            print("(raw)", txt[:3000], e)
 print("SMOKE PASS" if ok else "SMOKE FAIL")
 sys.exit(0 if ok else 1)

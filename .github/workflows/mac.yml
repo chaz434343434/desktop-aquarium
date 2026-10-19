@@ -19,6 +19,8 @@ jobs:
         include:
           - runner: macos-14          # Apple Silicon (M1 and newer)
             arch: arm64
+          - runner: macos-15          # Apple Silicon, newer macOS (only to compare; not uploaded)
+            arch: arm64-check
           - runner: macos-15-intel    # older Intel Macs
             arch: intel
     runs-on: ${{ matrix.runner }}
@@ -61,7 +63,7 @@ jobs:
           path: out/
 
       - name: Attach the dmg to the release
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && matrix.arch != 'arm64-check'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ github.event.release.tag_name }}" out/*.dmg --clobber --repo "${{ github.repository }}"
