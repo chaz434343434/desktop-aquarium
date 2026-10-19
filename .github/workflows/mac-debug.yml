@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-14, macos-15]
+        runner: [macos-14]
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -19,16 +19,10 @@ jobs:
       - run: pip install pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
       - name: Build
         run: sh build_assets/build_mac.sh > build.log 2>&1 || { tail -40 build.log; exit 1; }
-      - name: Launch variants
+      - name: Smoke variants
         run: |
-          EXE="dist/Desktop Aquarium.app/Contents/MacOS/Desktop Aquarium"
-          export DA_UPDATE_API=http://127.0.0.1:9/x
-          run() { echo "== $1"; shift; "$@"; echo "EXIT $?"; }
-          run "bash: plain 6s" "$EXE" --fresh --seconds 6 --save /tmp/a.json
-          run "bash: demo 6s" "$EXE" --fresh --demo --seconds 6 --save /tmp/b.json
-          run "bash: smoke args" "$EXE" --fresh --demo --save /tmp/c.json --seconds 6 --shots /tmp/shots1
-          run "python popen: plain" python -c "import subprocess,sys; sys.exit(subprocess.call([sys.argv[1], '--fresh', '--seconds', '6', '--save', '/tmp/d.json']))" "$EXE"
-          run "python popen: demo" python -c "import subprocess,sys; sys.exit(subprocess.call([sys.argv[1], '--fresh', '--demo', '--seconds', '6', '--save', '/tmp/e.json']))" "$EXE"
-          run "open -W (like Finder)" open -W -n "dist/Desktop Aquarium.app" --args --fresh --seconds 6 --save /tmp/f.json
-          ls -la /tmp/*.json
+          for caps in "" "8.0" "3.0,4.7,9.7,13.0"; do
+            echo "== screencapture at: [$caps]"
+            DA_CAPS="$caps" python build_assets/mac_smoke.py "out/shots_${caps}" 2>&1 | grep -E "exit code|SMOKE"
+          done
           true

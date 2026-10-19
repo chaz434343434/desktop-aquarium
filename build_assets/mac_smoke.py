@@ -17,7 +17,8 @@ env.pop("SDL_VIDEODRIVER", None)
 p = subprocess.Popen([exe, "--fresh", "--demo", "--save", save, "--seconds", "16",
                       "--shots", os.path.join(shots, "game")], env=env)
 t0 = time.time()
-for at in (3.0, 4.7, 9.7, 13.0):          # tank / shop open / options open / closed again
+caps = os.environ.get("DA_CAPS", "3.0,4.7,9.7,13.0")   # tank / shop open / options open / closed again
+for at in [float(x) for x in caps.split(",") if x]:
     time.sleep(max(0, at - (time.time() - t0)))
     subprocess.run(["screencapture", "-x", os.path.join(shots, f"desktop_{at:04.1f}s.png")])
 code = p.wait(timeout=60)
