@@ -1,4 +1,5 @@
-# Experiments for the Apple Silicon build (run by hand). Builds a few variants and runs each one.
+# Experiments for the Apple Silicon build (run by hand): the real build script with parts
+# switched off, then the real smoke test.
 name: Mac debug
 
 on:
@@ -10,16 +11,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: demo
-            args: --demo
-          - name: shots-png
-            args: --shots shots
-          - name: shots-bmp
-            args: --shots shots
-            extra: DA_SHOT_EXT=bmp
-          - name: demo-shots-bmp
-            args: --demo --shots shots
-            extra: DA_SHOT_EXT=bmp
+          - name: full
+            env: DA_X=1
+          - name: no-icon
+            env: DA_NO_ICON=1
+          - name: no-bundle-id
+            env: DA_NO_BID=1
+          - name: no-plist
+            env: DA_NO_PLIST=1
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -28,14 +27,9 @@ jobs:
           python-version: "3.11"
       - run: pip install pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
       - name: Build
+        run: export ${{ matrix.env }}; sh build_assets/build_mac.sh > build.log 2>&1 || { tail -40 build.log; exit 1; }
+      - name: Smoke
         run: |
-          python -m PyInstaller --noconfirm --windowed --onedir --name "Desktop Aquarium" \
-            --exclude-module numpy --exclude-module tkinter --exclude-module matplotlib DesktopAquarium.pyw > build.log 2>&1 || { tail -50 build.log; exit 1; }
-          grep -i "warn\|error" build.log | grep -iv "hidden import\|ignoring\|library not found" | tail -20 || true
-          codesign --force --deep --sign - "dist/Desktop Aquarium.app"
-          ls "dist/Desktop Aquarium.app/Contents/Frameworks" | head -80
-      - name: Run
-        run: |
-          export ${{ matrix.extra }} DA_FAULTLOG=$PWD/fault.txt DA_UPDATE_API=http://127.0.0.1:9/x
-          "dist/Desktop Aquarium.app/Contents/MacOS/Desktop Aquarium" --fresh --seconds 14 --save $PWD/s.json ${{ matrix.args }}; echo "EXIT $?"; echo "shots: $(ls shots 2>/dev/null | xargs)"
+          export DA_FAULTLOG=$PWD/fault.txt
+          python build_assets/mac_smoke.py out/shots 2>&1 | grep -v "^   " | head -20 || true
           echo "---- fault log"; cat fault.txt || true

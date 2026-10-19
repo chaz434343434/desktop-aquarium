@@ -8,15 +8,20 @@ ARCH=$(python -c "import platform; print('arm64' if platform.machine() == 'arm64
 APP="dist/Desktop Aquarium.app"
 
 rm -rf build dist out
-python -m PyInstaller --noconfirm --windowed --onedir --name "Desktop Aquarium" \
-  --icon build_assets/icon.png --osx-bundle-identifier com.chaz434343434.desktopaquarium \
+ICON="--icon build_assets/icon.png"
+BID="--osx-bundle-identifier com.chaz434343434.desktopaquarium"
+[ -n "$DA_NO_ICON" ] && ICON=""
+[ -n "$DA_NO_BID" ] && BID=""
+python -m PyInstaller --noconfirm --windowed --onedir --name "Desktop Aquarium" $ICON $BID \
   --exclude-module numpy --exclude-module tkinter --exclude-module matplotlib \
   DesktopAquarium.pyw
 
 PL="$APP/Contents/Info.plist"
-plutil -replace CFBundleShortVersionString -string "$VER" "$PL"
-plutil -replace CFBundleVersion -string "$VER" "$PL"
-plutil -replace NSHumanReadableCopyright -string "Desktop Aquarium - made with love for a great teacher" "$PL"
+if [ -z "$DA_NO_PLIST" ]; then
+  plutil -replace CFBundleShortVersionString -string "$VER" "$PL"
+  plutil -replace CFBundleVersion -string "$VER" "$PL"
+  plutil -replace NSHumanReadableCopyright -string "Desktop Aquarium - made with love for a great teacher" "$PL"
+fi
 # ad-hoc signature (Apple Silicon won't run unsigned code at all)
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
