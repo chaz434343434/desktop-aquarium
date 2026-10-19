@@ -288,9 +288,27 @@ def global_mult(s):
     return m
 
 
+_draw_cache = None      # while a frame is being drawn nothing changes, so income is worked out once
+
+
+def cache_on():
+    global _draw_cache
+    _draw_cache = {}
+
+
+def cache_off():
+    global _draw_cache
+    _draw_cache = None
+
+
 def income(s):
+    if _draw_cache is not None and id(s) in _draw_cache:
+        return _draw_cache[id(s)]
     g = global_mult(s)
-    return sum(fish_rate(s, f) for f in s["fish"]) * g
+    v = sum(fish_rate(s, f) for f in s["fish"]) * g
+    if _draw_cache is not None:
+        _draw_cache[id(s)] = v
+    return v
 
 
 def pop_value(s):

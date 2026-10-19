@@ -796,16 +796,8 @@ class Tank:
     def draw(self):
         s = self.surface
         t = self.time
-        s.blit(self.static, (0, 0))
-        # surface ripples
-        for x in range(2, self.w - 2):
-            if int(x * 0.5 + t * 6) % 7 == 0:
-                s.set_at((x, WATER_TOP), (170, 220, 240))
-            else:
-                s.set_at((x, WATER_TOP), (110, 190, 220))
-        for p in self.plants:
-            if p.get("back"):
-                self.draw_plant(s, p, t)
+        self.refresh_layers(t)
+        s.blit(self._back, (0, 0))
         if self.lanterns:
             self.draw_lanterns(s, t)
         for a in self.toys.values():
@@ -833,9 +825,7 @@ class Tank:
         ball = self.toys.get("ball")
         if ball:
             sprites.draw_toy(s, "ball", ball.x, ball.y + 3, t)
-        for p in self.plants:
-            if not p.get("back"):
-                self.draw_plant(s, p, t)
+        s.blit(self._front, (0, 0))
         spooky = self.haunted()
         for b in self.decor:
             x = int(b[0] + math.sin(b[3]) * 0.8)
@@ -898,6 +888,23 @@ class Tank:
                     s.blit(tag, (x, y))
         s.set_clip(None)
         return s
+
+    LAYER_EVERY = 0.1        # plants sway slowly: redraw them 10x a second, not every frame
+
+    def refresh_layers(self, t):
+        """background + back plants + surface ripples, and the front plants, cached between redraws"""
+        if (getattr(self, "_back", None) is not None and self._back.get_size() == self.static.get_size()
+                and self._layer_src is self.static and 0 <= t - self._layer_t < self.LAYER_EVERY):
+            return
+        self._layer_t = t
+        self._layer_src = self.static
+        back = self.static.copy()
+        for x in range(2, self.w - 2):
+            back.set_at((x, WATER_TOP), (170, 220, 240) if int(x * 0.5 + t * 6) % 7 == 0 else (110, 190, 220))
+        front = pygame.Surface(self.static.get_size(), pygame.SRCALPHA)
+        for p in self.plants:
+            self.draw_plant(back if p.get("back") else front, p, t)
+        self._back, self._front = back, front
 
     def draw_plant(self, s, p, t):
         segs = max(3, int(p["h"] / 3))

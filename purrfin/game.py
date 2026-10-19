@@ -82,6 +82,8 @@ class Game:
         self.minimized = False
         # Mac (no see-through windows): the window hugs the tank, and grows taller while a panel is open
         self.compact = winutil.COMPACT or bool(os.environ.get("DA_COMPACT"))
+        # every platform: the window only covers the tank + buttons until a panel opens. A smaller window
+        # is much cheaper for Windows to draw over other programs (a full-width one made Chrome lag).
         self.compact_tall = False
         self.layout()
         self.tank = Tank(self, self.tank_rect.w // self.S)
@@ -143,14 +145,17 @@ class Game:
             tx = (m["w"] - tw) // 2
         else:
             tx = m["w"] - tw
-        if self.compact:
+        if self.compact or self.minimized or not self.compact_tall:
             k = max(1.0, ui_k)
             if self.minimized:
                 self.win_h = min(self.win_h, int(50 * k))
             elif not self.compact_tall:            # tank + buttons + room for a few messages
                 self.win_h = min(self.win_h, th + int((2 * STRIP_H + 16 + 124) * k))
             # wide enough for the shop panel; while it's open, also room to drag it and for fish info beside it
-            self.win_w = min(m["w"], max(tw, int(820 * k)) + (int(340 * k) if self.compact_tall else 0))
+            if self.compact:
+                self.win_w = min(m["w"], max(tw, int(820 * k)) + (int(340 * k) if self.compact_tall else 0))
+            else:                                  # see-through anyway: just room for the HUD row
+                self.win_w = min(m["w"], max(tw, int(1000 * k)))
             if st["align"] == "left":
                 wx = 0
             elif st["align"] == "center":
@@ -185,8 +190,8 @@ class Game:
             self.tank.resize(self.tank_rect.w // self.S)
 
     def fit_compact(self):
-        """compact (Mac) window: tall while a panel or popup is open, short otherwise"""
-        if not self.compact or self.screen is None:
+        """the window is tall while a panel or popup is open, short (just the tank + buttons) otherwise"""
+        if self.screen is None:
             return
         ui = self.ui
         tall = bool(ui.panel or self.renaming or ui.update_prompt or self.welcome or self.state.get("pending"))
@@ -979,6 +984,13 @@ class Game:
 
     # ------------------------------------------------------------ draw
     def draw(self):
+        E.cache_on()
+        try:
+            self._draw()
+        finally:
+            E.cache_off()
+
+    def _draw(self):
         self.fit_compact()
         scr = self.screen
         scr.fill((18, 22, 34) if self.compact else KEY)

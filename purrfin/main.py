@@ -13,7 +13,16 @@ import pygame  # noqa: E402
 from . import winutil  # noqa: E402
 from .game import Game  # noqa: E402
 
-FPS = 30
+FPS = 30           # while you're using it
+IDLE_FPS = 20      # just sitting on the desktop: fish still swim smoothly, less work for the computer
+HIDDEN_FPS = 8     # tank hidden with the _ button
+
+
+def pick_fps(g):
+    if g.minimized:
+        return HIDDEN_FPS
+    busy = g.mouse_low is not None or g.ui.mouse is not None or g.ui.panel or g.now - g.last_input < 3
+    return FPS if busy else IDLE_FPS
 
 
 def run_script(g, t, shots, shot_dir, state):
@@ -110,7 +119,7 @@ def main(argv=None):
     if args.shots:
         os.makedirs(args.shots, exist_ok=True)
     while g.running:
-        dt = min(0.1, clock.tick(FPS) / 1000)
+        dt = min(0.15, clock.tick(pick_fps(g)) / 1000)
         t += dt
         for e in pygame.event.get():
             if e.type == pygame.QUIT:

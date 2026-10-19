@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.4.0)
+DESKTOP AQUARIUM  (version 1.4.1)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
