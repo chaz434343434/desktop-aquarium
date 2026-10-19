@@ -18,7 +18,11 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         body = json.dumps({"tag_name": state["tag"], "assets": [
             {"name": "Desktop Aquarium.zip", "size": 1,
-             "browser_download_url": "http://127.0.0.1/none.zip"}]}).encode()
+             "browser_download_url": "http://127.0.0.1/none.zip"},
+            {"name": "Desktop.Aquarium.Mac.arm64.dmg", "size": 1,
+             "browser_download_url": "http://127.0.0.1/none.dmg"},
+            {"name": "Desktop.Aquarium.Mac.intel.dmg", "size": 1,
+             "browser_download_url": "http://127.0.0.1/none.dmg"}]}).encode()
         self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
