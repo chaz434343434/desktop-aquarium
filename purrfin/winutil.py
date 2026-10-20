@@ -3,6 +3,7 @@ Windows: transparent, click-through, always-on-top, non-activating overlay (Win3
 macOS / others: there's no colour-key transparency, so the game uses a compact window that sits
 just around the tank (see Game.layout); here we only place it, keep it on top and set its opacity."""
 import ctypes
+import os
 import sys
 
 IS_WIN = sys.platform == "win32"
@@ -152,10 +153,23 @@ def restore_foreground(hwnd):
 
 
 # ---------------------------------------------------------------- macOS / other
+_WINDOW = None
+
+
 def _sdl_window():
+    """pygame's Window for the game window, made ONCE and kept.
+    Window.from_display_module() leaves pygame holding a pointer to the object it returns; if that
+    object is thrown away, the next window resize follows the stale pointer into freed memory.
+    On Apple-chip Macs that crashed the game when the window changed size (Options > Tank width,
+    opening the Shop...). DA_OLD_WINDOW=1 brings the old behaviour back, only for the crash test."""
+    global _WINDOW
     try:
         from pygame._sdl2.video import Window
-        return Window.from_display_module()
+        if os.environ.get("DA_OLD_WINDOW"):
+            return Window.from_display_module()
+        if _WINDOW is None:
+            _WINDOW = Window.from_display_module()
+        return _WINDOW
     except Exception:
         return None
 

@@ -98,6 +98,7 @@ def main(argv=None):
     ap.add_argument("--seconds", type=float, default=0, help="auto-quit after N seconds (testing)")
     ap.add_argument("--shots", default=None, help="run UI smoke script and save screenshots here")
     ap.add_argument("--script", action="store_true", help="run the UI smoke script without screenshots")
+    ap.add_argument("--stress-resize", action="store_true", help="test: keep resizing the window")
     ap.add_argument("--demo", action="store_true", help="give a pile of scales and fish (testing)")
     args = ap.parse_args(argv)
 
@@ -129,6 +130,7 @@ def main(argv=None):
         winutil.restore_foreground(prev_fg)
     clock = pygame.time.Clock()
     pacer = Pacer()
+    stress = [0.0, 0]
     dt = 0.0
     t = 0.0
     script = {}
@@ -159,6 +161,15 @@ def main(argv=None):
         g.draw()
         if args.shots or args.script:
             run_script(g, t, None, args.shots, script)
+        if args.stress_resize:              # test: change the window size again and again
+            stress[0] += dt
+            if stress[0] >= 0.25:
+                stress[0] = 0.0
+                stress[1] += 1
+                if stress[1] % 3 == 0:
+                    g.ui.open_tab("fish")
+                else:
+                    g.change_setting("width", 0.30 if stress[1] % 2 else 0.45)
         pygame.display.flip()
         if args.seconds and t >= args.seconds:
             g.running = False
