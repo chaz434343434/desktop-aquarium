@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.4.3)
+DESKTOP AQUARIUM  (version 1.4.4)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -59,7 +59,7 @@ GOOD TO KNOW
   - "Chill" pauses hunger and happiness if you just want to watch.
   - Options lets you change the tank size, position, brightness, monitor, sound and more.
   - Text too small? Options > UI size makes all the buttons and text 150% or 200% bigger.
-  - Older or slower laptop? Options > Performance > Battery saver makes the tank even lighter.
+  - Computer lagging? Options > Performance > Battery saver makes the tank even lighter.
     The game also slows itself down while a full-screen video or game is in front of it.
   - Drag the dotted bar at the top of the Shop/Fishdex to move it.
   - The game saves by itself. Click the red x on the tank to save and close.

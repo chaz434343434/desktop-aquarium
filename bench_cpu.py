@@ -1,8 +1,8 @@
 """CPU benchmark: runs the real game (python -m purrfin.main) on the top monitor with a busy
 late-game save for N seconds and reports its CPU use and frame cost.
 Usage: python bench_cpu.py [seconds] [label]
-The teacher's laptop (older Ryzen 5 ThinkPad) is roughly 2-3x slower than the dev PC,
-so multiply the CPU % here by ~3 to picture it there."""
+Laptops can be a few times slower than the PC this was tuned on, so the second
+number (x3) is a rough worst case."""
 import ctypes
 import json
 import os
@@ -73,5 +73,5 @@ c1, d1, t1 = cpu_seconds(p._handle), cpu_seconds(dwm) if dwm else 0, time.time()
 p.wait()
 pct = (c1 - c0) / (t1 - t0) * 100
 dpct = (d1 - d0) / (t1 - t0) * 100
-print(f"{label:12s} game CPU {pct:5.1f}% of one core here  (~{min(100, pct * 3):.0f}% on a ~3x slower laptop)"
+print(f"{label:12s} game CPU {pct:5.1f}% of one core here  (~{min(100, pct * 3):.0f}% on a computer ~3x slower)"
       f"  | Windows compositor (dwm) {dpct:4.1f}%")
