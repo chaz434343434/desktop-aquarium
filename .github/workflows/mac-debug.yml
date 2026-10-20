@@ -21,6 +21,7 @@ jobs:
         run: sh build_assets/build_mac.sh > build.log 2>&1 || { tail -40 build.log; exit 1; }
       - name: Resize stress, old vs fixed
         run: |
+          set +e
           EXE="dist/Desktop Aquarium.app/Contents/MacOS/Desktop Aquarium"
           export DA_UPDATE_API=http://127.0.0.1:9/x
           for mode in old fixed; do
