@@ -32,6 +32,13 @@ for run in range(3):
     print(f"run {run + 1}: exit code {code} | save written {os.path.exists(save)}", flush=True)
     ok &= good
 
+# resizing the window again and again (tank width, opening the shop): this used to crash Apple-chip Macs
+for run in range(2):
+    save = os.path.join(tempfile.mkdtemp(), "save.json")
+    code = subprocess.call([exe, "--fresh", "--stress-resize", "--save", save, "--seconds", "15"], env=env)
+    print(f"resize stress {run + 1}: exit code {code}", flush=True)
+    ok &= code == 0
+
 # the game's own screenshots, for a closer look (not pass/fail)
 tmp = tempfile.mkdtemp(prefix="da_shots_")
 code = subprocess.call([exe, "--fresh", "--demo", "--save", os.path.join(tmp, "s.json"), "--seconds", "13",

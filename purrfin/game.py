@@ -137,6 +137,10 @@ class Game:
         self.win_x = m["x"]
         self.win_y = m["y"] + m["h"] - self.win_h
         tw = max(480, int(m["w"] * st["width"]))
+        if self.compact:
+            # Mac: the window can't be see-through, so the tank fills it edge to edge (no empty box
+            # beside it). That means it's at least as wide as the row of buttons above it.
+            tw = max(tw, int(800 * max(1.0, ui_k)))
         tw = min(tw, m["w"]) // self.S * self.S
         th = TANK_H * self.S
         if st["align"] == "left":
@@ -149,11 +153,12 @@ class Game:
             k = max(1.0, ui_k)
             if self.minimized:
                 self.win_h = min(self.win_h, int(50 * k))
+            elif not self.compact_tall and self.compact:   # Mac: just the tank and its two rows of buttons
+                self.win_h = min(self.win_h, th + int((2 * STRIP_H + 10) * k))
             elif not self.compact_tall:            # tank + buttons + room for a few messages
                 self.win_h = min(self.win_h, th + int((2 * STRIP_H + 16 + 124) * k))
-            # wide enough for the shop panel; while it's open, also room to drag it and for fish info beside it
-            if self.compact:
-                self.win_w = min(m["w"], max(tw, int(820 * k)) + (int(340 * k) if self.compact_tall else 0))
+            if self.compact:                       # exactly the tank's width, even with the shop open
+                self.win_w = min(m["w"], tw)
             else:                                  # see-through anyway: just room for the HUD row
                 self.win_w = min(m["w"], max(tw, int(1000 * k)))
             if st["align"] == "left":

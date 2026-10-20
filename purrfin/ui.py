@@ -386,15 +386,17 @@ class UI:
 
     def draw_toasts(self, scr):
         g = self.g
-        y = self.hud_top() - 4
+        inside = g.compact and not g.compact_tall      # Mac's short window: no room above, so over the water
+        y = self.tank.y + 8 if inside else self.hud_top() - 4
         for text, col, t in reversed(g.toasts):
             img = self.f_norm.render(text, True, col)
             w = img.get_width() + 20
             x = max(4, min(self.tank.x + 4, self.tank.right - 4 - w))
-            rr = pygame.Rect(x, y - img.get_height() - 10, w, img.get_height() + 10)
+            h = img.get_height() + 10
+            rr = pygame.Rect(x, y if inside else y - h, w, h)
             self.box(scr, rr, BG)
             scr.blit(img, (rr.x + 10, rr.y + 5))
-            y = rr.y - 4
+            y = rr.bottom + 4 if inside else rr.y - 4
 
     def draw_floaters(self, scr):
         g = self.g
@@ -466,6 +468,8 @@ class UI:
                 w = max(i.get_width() for i in imgs) + 20
                 h = sum(i.get_height() + 2 for i in imgs) + 14
                 rr = pygame.Rect(self.mouse[0] - w // 2, rect.y - h - 6, w, h)
+                if rr.y < 0:                       # no room above (Mac's short window): show it below
+                    rr.y = rect.bottom + 6
                 rr.clamp_ip(scr.get_rect())
                 self.box(scr, rr, BG)
                 y = rr.y + 8

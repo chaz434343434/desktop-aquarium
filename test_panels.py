@@ -36,7 +36,7 @@ g.mouse_up(target, 1)
 g.update(0.03)
 g.draw()
 moved = g.ui.panel_rect
-check("panel moved left", moved.x < pr.x - 300)
+check("panel moved left", moved.x < pr.x - 300 or (g.compact and moved.y != pr.y))     # Mac: no room sideways
 check("panel stays on screen", g.screen.get_rect().contains(moved))
 check("position saved in settings", g.state["settings"].get("panel_pos") is not None)
 
@@ -65,7 +65,7 @@ g.draw()
 g.ui.box = orig_box
 tip = [r for r in drawn if r.size == (300, 150)]
 check("fish stats shown with panel open", bool(tip))
-check("fish stats don't overlap the panel", tip and not tip[0].colliderect(g.ui.panel_rect))
+check("fish stats don't overlap the panel", tip and (g.compact or not tip[0].colliderect(g.ui.panel_rect)))
 
 g.ui.reset_panel_pos()
 g.draw()

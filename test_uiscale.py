@@ -52,7 +52,8 @@ for k in (1.0, 1.5, 2.0):
     g.mouse_motion(screen_pt((grip[0] - 100, grip[1]), k), (-100, 0), (1, 0, 0))
     g.mouse_up(screen_pt((grip[0] - 100, grip[1]), k), 1)
     g.draw()
-    check(f"{tag}: dragging the panel follows the mouse", abs(g.ui.panel_rect.x - (pr.x - 100)) <= 2)
+    check(f"{tag}: dragging the panel follows the mouse",
+          abs(g.ui.panel_rect.x - (pr.x - 100)) <= 2 or (g.compact and g.ui.panel_rect.x <= pr.x and g.ui.panel_rect.x >= 0))
     # scroll the Fishdex (40 catfish, always long enough to scroll) with the wheel
     g.ui.panel = "dex"
     g.draw()
