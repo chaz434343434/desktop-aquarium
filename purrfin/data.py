@@ -385,8 +385,8 @@ UPGRADES = [
          desc="After your eggs hatch, the same eggs are laid again for you."),
     dict(id="hands", name="Gentle Hands", base=30, growth=3.2, max=50,
          desc="Petting gives +30% more of everything."),
-    dict(id="rub", name="Belly Rubs", base=150, growth=3.0, max=13,
-         desc="Ability! Press Rub! next to Shop, then hold the mouse and rub your fish. Longer each level."),
+    dict(id="rub", name="Fin Scratches", base=150, growth=3.0, max=13,
+         desc="Ability! Press Scratch! next to Shop, then hold the mouse on your fish and wiggle. Longer each level."),
     dict(id="magnet", name="Bubble Magnet", base=80, growth=3.3, max=50,
          desc="Pop-bubbles worth +35% more."),
     dict(id="lucky", name="Lucky Moss", base=1000, growth=4.0, max=12,
@@ -486,8 +486,8 @@ VISITORS_BY_ID = {v["id"]: v for v in VISITORS}
 VISIT_EVERY = (240, 480)
 HAUNTED_POP_MULT = 2         # pop-bubbles are skulls worth this much in the Haunted Lagoon
 
-# ---------------------------------------------------------------- Belly Rubs ability
-RUB_BASE = 2                 # seconds of rubbing = RUB_BASE + level  (Lv 1 = 3s ... Lv 13 = 15s)
+# ---------------------------------------------------------------- Fin Scratches ability (id 'rub')
+RUB_BASE = 2                 # seconds of scratching = RUB_BASE + level  (Lv 1 = 3s ... Lv 13 = 15s)
 RUB_COOLDOWN = 60            # seconds before you can rub again
 RUB_EVERY = 0.07             # fastest rub payout (about 14 a second)      # seconds between visitors
 

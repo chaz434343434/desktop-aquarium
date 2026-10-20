@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.4.2)
+DESKTOP AQUARIUM  (version 1.4.3)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -13,9 +13,9 @@ THE BASICS
   - Open the Shop to buy new catfish, toys, upgrades and tank themes.
   - Fish play with toys and shed scales when they do.
   - Hover over a fish to see how it's doing.
-  - Belly Rubs (Shop > Upgrades) gives you a Rub! button. Press it, then hold the mouse down on
-    your fish and wiggle: every rub pays! Lasts 3 seconds, +1 second per level (up to 15),
-    then your hands need a minute's rest.
+  - Fin Scratches (Shop > Upgrades) gives you a Scratch! button. Press it, then hold the mouse
+    down on your fish and wiggle: every scratch pays! Lasts 3 seconds, +1 second per level
+    (up to 15), then it recharges for a minute.
   - Right-click a fish to give it a name. To take a name off, right-click it again and
     press "Remove name" (or save an empty name).
 

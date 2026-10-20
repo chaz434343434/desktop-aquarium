@@ -60,7 +60,7 @@ class Game:
         self.food_cd = {}
         self.last_pet = {}
         self.last_any_pet = -9.0
-        self.rub = "ready"            # Belly Rubs ability: ready | armed | active | cooldown
+        self.rub = "ready"            # Fin Scratches ability: ready | armed | active | cooldown
         self.rub_t = 0.0              # seconds left of rubbing / of cooldown
         self.renaming = None      # fish dict being renamed
         self.rename_text = ""
@@ -382,16 +382,16 @@ class Game:
 
     PET_COOLDOWN = 0.2          # max 5 pet payouts per second, however fast you click
 
-    # ---- Belly Rubs: press the button, then the first rub on a fish starts the timer
+    # ---- Fin Scratches (id 'rub'): press the button, then the first scratch on a fish starts the timer
     def rub_button(self):
         if self.rub == "ready":
             self.rub = "armed"
-            self.toast(f"Hold the mouse on a fish and rub! You get {E.rub_secs(self.state)} seconds.",
+            self.toast(f"Hold the mouse on a fish and wiggle to scratch! You get {E.rub_secs(self.state)} seconds.",
                        (255, 190, 220), 4)
         elif self.rub == "armed":
             self.rub = "ready"
         elif self.rub == "cooldown":
-            self.deny(f"Your hands need a rest. Rub again in {int(self.rub_t) + 1}s.")
+            self.deny(f"Scratches are recharging. Ready in {int(self.rub_t) + 1}s.")
 
     def tick_rub(self, dt):
         if self.rub in ("active", "cooldown"):
@@ -399,7 +399,7 @@ class Game:
             if self.rub_t <= 0:
                 if self.rub == "active":
                     self.rub, self.rub_t = "cooldown", float(RUB_COOLDOWN)
-                    self.toast("Phew! That's enough rubbing for now.", (255, 190, 220), 3)
+                    self.toast("Your fish are happy and relaxed. Scratches recharge in a minute.", (255, 190, 220), 3)
                 else:
                     self.rub, self.rub_t = "ready", 0.0
         if self.rub != "ready" and not E.ulv(self.state, "rub"):      # spawned: the upgrade is gone
@@ -499,7 +499,7 @@ class Game:
         if a and self.rub in ("armed", "active"):
             self.rubbing(a)
             return
-        if a:                       # petting is click-only: one click = one pet (rubbing needs Belly Rubs)
+        if a:                       # petting is click-only: one click = one pet (wiggling needs Fin Scratches)
             if self.now - self.last_pet.get(a.f["uid"], -9) > 0.25:
                 self.last_pet[a.f["uid"]] = self.now
                 self.pet(a)

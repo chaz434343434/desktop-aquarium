@@ -354,15 +354,15 @@ class UI:
             st, left = g.rub, g.rub_t
             pink = (196, 84, 140)
             if st == "ready":
-                rub = ("Rub!", _lighten(pink, 0.2) if int(g.now * 2) % 2 else pink, ["Belly Rubs", "Click, then hold the mouse",
-                       f"and rub your fish for {E.rub_secs(s)}s!"])
+                rub = ("Scratch!", _lighten(pink, 0.2) if int(g.now * 2) % 2 else pink, ["Fin Scratches", "Click, then hold the mouse",
+                       f"on your fish and wiggle for {E.rub_secs(s)}s!"])
             elif st == "armed":
-                rub = ("Rub a fish!", _lighten(pink, 0.35), ["Hold the mouse on a fish and wiggle", "Click again to cancel"])
+                rub = ("Scratch a fish!", _lighten(pink, 0.35), ["Hold the mouse on a fish and wiggle", "Click again to cancel"])
             elif st == "active":
-                rub = (f"Rub! {left:.1f}s", _lighten(pink, 0.45), ["Keep rubbing!"])
+                rub = (f"Scratch! {left:.1f}s", _lighten(pink, 0.45), ["Keep scratching!"])
             else:
-                rub = (f"Rub {int(left) + 1}s", (70, 50, 64), ["Belly Rubs", "Your hands are resting"])
-            specs.append((rub[0], g.rub_button, self.f_norm.size("Rub a fish!")[0] + 20, rub[1], rub[2]))
+                rub = (f"Scratch {int(left) + 1}s", (70, 50, 64), ["Fin Scratches", "Recharging"])
+            specs.append((rub[0], g.rub_button, self.f_norm.size("Scratch a fish!")[0] + 20, rub[1], rub[2]))
         for lab, cb, w, col, tip in specs:
             w = w or self.f_norm.size(lab)[0] + 20
             bx -= w

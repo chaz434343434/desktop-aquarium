@@ -69,6 +69,7 @@ v["x"] = g.tank.w / 2
 v["pause"] = 99
 shot("visitor")
 before = s["bubbles"]
+g.tank.pops.clear()          # a bubble floating over the visitor would take the click instead
 g.mouse_down(tuple(int(c) for c in g.to_screen(v["x"], v["y"] - 3)), 1)
 check("clicking the visitor gives scales", s["bubbles"] > before and g.tank.visitor is None)
 

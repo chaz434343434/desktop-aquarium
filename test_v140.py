@@ -58,12 +58,12 @@ a.x, a.y = 60, 30
 # ---- no ability: holding + wiggling is still just one pet
 before = s["stats"]["pets"]
 wiggle(a, 40)
-check("without Belly Rubs, rubbing = 1 pet", s["stats"]["pets"] - before == 1)
+check("without Fin Scratches, wiggling = 1 pet", s["stats"]["pets"] - before == 1)
 
 # ---- Belly Rubs Lv 1: 3 seconds of rubbing
 E.earn(s, 1e4)
 g.buy_upgrade("rub")
-check("Belly Rubs can be bought early (150 scales)", E.ulv(s, "rub") == 1 and E.rub_secs(s) == 3)
+check("Fin Scratches can be bought early (150 scales)", E.ulv(s, "rub") == 1 and E.rub_secs(s) == 3)
 g.rub_button()
 check("button arms it", g.rub == "armed")
 step(30)
