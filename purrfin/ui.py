@@ -591,18 +591,29 @@ class UI:
         if self.panel != "baby":
             self.button(scr, (rr.right - 40, rr.y + 8, 30, 30), "x", lambda: self.open(self.panel), col=BAD)
         if self.panel == "shop":
+            seasons = E.active_seasons(g.state)
             tabs = [("fish", "Catfish"), ("toys", "Toys"), ("upgrades", "Upgrades"), ("hatchery", "Hatchery"),
-                    ("themes", "Themes"),
-                    ("mine", "My Tank"), ("spawn", "Pearls")]
+                    ("themes", "Themes")]
+            tabs += [("season:" + se, SEASONS[se]["name"]) for se in seasons]
+            tabs += [("mine", "My Tank"), ("spawn", "Pearls")]
+            if self.tab.startswith("season:") and self.tab[7:] not in seasons:
+                self.tab = "fish"                       # that holiday is over (and you never had any of it)
+            pad, gap = (22, 6) if len(tabs) <= 7 else (14, 4)
             x = rr.x + 10
             for key, lab in tabs:
-                tw = self.f_norm.size(lab)[0] + 22
-                self.button(scr, (x, rr.y + 20, tw, 30), lab, lambda k=key: self.set_tab(k),
-                            col=GOOD if self.tab == key else TAB)
-                x += tw + 6
-            draw = {"fish": self.tab_fish, "toys": self.tab_toys, "upgrades": self.tab_upgrades,
-                    "mine": self.tab_mine, "spawn": self.tab_spawn, "hatchery": self.tab_hatchery,
-                    "themes": self.tab_themes}[self.tab]
+                tw = self.f_norm.size(lab)[0] + pad
+                if key.startswith("season:"):
+                    col = (232, 120, 30) if self.tab == key else (150, 74, 20)
+                else:
+                    col = GOOD if self.tab == key else TAB
+                self.button(scr, (x, rr.y + 20, tw, 30), lab, lambda k=key: self.set_tab(k), col=col)
+                x += tw + gap
+            if self.tab.startswith("season:"):
+                draw = self.tab_season
+            else:
+                draw = {"fish": self.tab_fish, "toys": self.tab_toys, "upgrades": self.tab_upgrades,
+                        "mine": self.tab_mine, "spawn": self.tab_spawn, "hatchery": self.tab_hatchery,
+                        "themes": self.tab_themes}[self.tab]
             title = None
         elif self.panel == "dex":
             draw, title = self.tab_dex, "Fishdex"
@@ -668,20 +679,21 @@ class UI:
                         col=btn_col, tip=tip)
         return rr
 
-    def tab_fish(self, scr, view, y):
+    def tab_fish(self, scr, view, y, season=None):
         g, s = self.g, self.g.state
         cap = E.capacity(s)
         n = len(s["fish"])
-        self.text(scr, f"Tank: {n}/{cap} fish  ({TANK_NAMES[E.ulv(s, 'tank')]})", self.f_norm,
-                  ACC if n >= cap else TEXT, (view.x + 8, y + 2))
-        self.text(scr, "New species give +3% scales forever.", self.f_small, DIM, (view.x + 8, y + 22))
         y0 = y
-        y += 42
         full = n >= cap
+        if not season:
+            self.text(scr, f"Tank: {n}/{cap} fish  ({TANK_NAMES[E.ulv(s, 'tank')]})", self.f_norm,
+                      ACC if n >= cap else TEXT, (view.x + 8, y + 2))
+            self.text(scr, "New species give +3% scales forever.", self.f_small, DIM, (view.x + 8, y + 22))
+            y += 42
         for sp in SEASONAL_SPECIES:
             why = E.seasonal_fish_buyable(s, sp["id"])
-            if why == "season":
-                continue                      # out of season and never owned: hidden
+            if why == "season" or sp["season"] != season:
+                continue                      # holiday fish live in their own tab
             c = E.species_cost(s, sp["id"])
             season = SEASONS[sp["season"]]["name"]
             ever = sp["id"] in s.get("seasonal_owned", [])
@@ -696,7 +708,7 @@ class UI:
             self.row(scr, view, y, sprites.fish_icon(sp["id"], 3), sp["name"] + ("" if ever else "  NEW!"), lines,
                      lab, lambda i=sp["id"]: g.buy_species(i), ok, tcol=(255, 170, 80))
             y += ROW_H
-        for sp in SPECIES:
+        for sp in ([] if season else SPECIES):
             i = sp["tier"]
             if not E.species_visible(s, i):
                 break
@@ -717,15 +729,16 @@ class UI:
             y += ROW_H
         return y - y0
 
-    def tab_toys(self, scr, view, y):
+    def tab_toys(self, scr, view, y, season=None):
         g, s = self.g, self.g.state
         y0 = y
-        self.text(scr, f"Fish play with toys and shed scales. Total bonus +{int(E.toy_bonus(s) * 100)}%",
-                  self.f_small, DIM, (view.x + 8, y + 2))
-        y += 24
+        if not season:
+            self.text(scr, f"Fish play with toys and shed scales. Total bonus +{int(E.toy_bonus(s) * 100)}%",
+                      self.f_small, DIM, (view.x + 8, y + 2))
+            y += 24
         unowned = 0
-        seasonal = [t for t in TOYS if t.get("season") and (E.toy_lv(s, t["id"]) or E.seasonal_ok(s, t))]
-        for t in seasonal + [t for t in TOYS if not t.get("season")]:
+        items = E.season_items(s, season)["toys"] if season else [t for t in TOYS if not t.get("season")]
+        for t in items:
             lv = E.toy_lv(s, t["id"])
             if lv == 0 and not t.get("season"):
                 unowned += 1
@@ -815,11 +828,13 @@ class UI:
             return f"Offline: {int(pct * 100)}% income for up to {hrs:g}h"
         return ""
 
-    def tab_upgrades(self, scr, view, y):
+    def tab_upgrades(self, scr, view, y, season=None):
         g, s = self.g, self.g.state
         y0 = y
         hidden = 0
-        for u in sorted(UPGRADES, key=lambda u: not u.get("season")):
+        for u in UPGRADES:
+            if u.get("season") != season:
+                continue
             if not E.upgrade_visible(s, u["id"]):
                 hidden += 1
                 continue
@@ -876,14 +891,15 @@ class UI:
             y += ROW_H
         return y - y0
 
-    def tab_themes(self, scr, view, y):
+    def tab_themes(self, scr, view, y, season=None):
         g, s = self.g, self.g.state
         y0 = y
-        self.text(scr, "Change the whole look of the tank. Every theme you own: +5% scales.", self.f_small, DIM,
-                  (view.x + 8, y + 2))
-        y += 24
-        for th in sorted(THEMES, key=lambda t: not t.get("season")):     # seasonal ones on top
-            if not E.theme_visible(s, th["id"]):
+        if not season:
+            self.text(scr, "Change the whole look of the tank. Every theme you own: +5% scales.", self.f_small, DIM,
+                      (view.x + 8, y + 2))
+            y += 24
+        for th in THEMES:
+            if th.get("season") != season or not E.theme_visible(s, th["id"]):
                 continue
             icon = pygame.Surface((56, 36))
             for yy in range(28):
@@ -914,6 +930,31 @@ class UI:
                      lambda i=th["id"]: g.theme_action(i), ok, btn_col=col,
                      tcol=(255, 170, 80) if th.get("season") else TEXT)
             y += ROW_H
+        return y - y0
+
+    def tab_season(self, scr, view, y):
+        """everything of one holiday in one place: its catfish, theme, toys and upgrades"""
+        g, s = self.g, self.g.state
+        season = self.tab[7:]
+        name = SEASONS[season]["name"]
+        y0 = y
+        if E.in_season(season):
+            msg = f"{name} specials! Only for sale around {name} - once you've had one, it's yours to buy again any time."
+        else:
+            msg = f"{name} is over, but you can still buy back the {name} things you've had before."
+        for ln in self.wrap(msg, self.f_small, view.w - 30):
+            self.text(scr, ln, self.f_small, (255, 190, 120), (view.x + 8, y + 2))
+            y += 18
+        y += 6
+        items = E.season_items(s, season)
+        for key, title, fn in (("fish", "Catfish", self.tab_fish), ("themes", "Tank theme", self.tab_themes),
+                               ("toys", "Toys", self.tab_toys), ("upgrades", "Upgrades", self.tab_upgrades)):
+            if not items[key]:
+                continue
+            self.text(scr, title, self.f_norm, (255, 170, 80), (view.x + 8, y + 2))
+            y += 26
+            y += fn(scr, view, y, season=season)
+            y += 6
         return y - y0
 
     def tab_hatchery(self, scr, view, y):

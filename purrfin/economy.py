@@ -129,6 +129,22 @@ def seasonal_fish_buyable(s, sp_id):
     return "season"
 
 
+def season_items(s, season):
+    """everything of one holiday the player can see right now: in season, or owned before"""
+    from .data import SEASONAL_SPECIES, THEMES, TOYS, UPGRADES
+    return dict(
+        fish=[sp for sp in SEASONAL_SPECIES if sp["season"] == season and seasonal_fish_buyable(s, sp["id"]) != "season"],
+        themes=[t for t in THEMES if t.get("season") == season and theme_visible(s, t["id"])],
+        toys=[t for t in TOYS if t.get("season") == season and (toy_lv(s, t["id"]) or seasonal_ok(s, t))],
+        upgrades=[u for u in UPGRADES if u.get("season") == season and upgrade_visible(s, u["id"])],
+    )
+
+
+def active_seasons(s):
+    """holidays that get their own Shop tab (Halloween, later Christmas...)"""
+    return [se for se in SEASONS if any(season_items(s, se).values())]
+
+
 def theme_visible(s, tid):
     th = THEMES_BY_ID[tid]
     return not th.get("season") or tid in s.get("themes", []) or in_season(th["season"])

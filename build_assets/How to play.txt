@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.5.0)
+DESKTOP AQUARIUM  (version 1.5.1)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -34,7 +34,8 @@ WHEN YOU COME BACK
   - Drag the Scale Jar, the egg nest and the toys to move them around.
 
 HOLIDAY SPECIALS
-  - Some things are only for sale during a holiday (by your computer's date).
+  - Some things are only for sale during a holiday (by your computer's date). They have their
+    own tab in the Shop, named after the holiday (the orange "Halloween" tab).
     Halloween (October 1 - November 2): the Haunted Lagoon theme, the Pumpkin Catfish,
     4 spooky toys (Jack-o'-Lantern, Witch's Cauldron, Fishbone Skeleton, Candy Corn) and
     3 upgrades (Ghostly Glow, Spooky Bubbles, Trick-or-Treat).
