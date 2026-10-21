@@ -334,19 +334,47 @@ def cache_off():
     _draw_cache = None
 
 
+def base_income(s):
+    """what the fish earn before the bubble boost (bubble values are worked out from this)"""
+    return sum(fish_rate(s, f) for f in s["fish"]) * global_mult(s)
+
+
+def bubble_power(s):
+    """everything that makes each pop-bubble worth more"""
+    return ((1 + 0.35 * ulv(s, "magnet")) * (1 + 0.25 * tlv(s, "lucky")) * (1 + ulv(s, "polish"))
+            * (1 + 0.4 * ulv(s, "spooky")))
+
+
+FISH_SHED = 0.5        # fish shed about half as much as all your pop-bubbles are worth
+
+
+def fish_boost(s):
+    """Bubble upgrades power up the fish too: fish earn x this. Bubbles themselves are unchanged.
+    Without it, bubbles grew thousands of times bigger than fish income and fish stopped mattering.
+    Early on bubbles are weak, so this is about x1; later it keeps fish a real share of your scales."""
+    t = 6.0 * 0.88 ** ulv(s, "bubbler")            # bubble spawn time, not counting a Frenzy
+    if toy_lv(s, "airstone"):
+        t /= 1 + 0.05 * toy_lv(s, "airstone") + 0.15
+    per_sec = 12 * bubble_power(s) * (1 + 9 * golden_chance(s)) / t     # bubbles' worth per second, in fish-seconds
+    return max(1.0, FISH_SHED * per_sec)
+
+
+def fish_mult(s):
+    """multiply a fish's fish_rate by this to get the scales/second it really earns"""
+    return global_mult(s) * fish_boost(s)
+
+
 def income(s):
     if _draw_cache is not None and id(s) in _draw_cache:
         return _draw_cache[id(s)]
-    g = global_mult(s)
-    v = sum(fish_rate(s, f) for f in s["fish"]) * g
+    v = base_income(s) * fish_boost(s)
     if _draw_cache is not None:
         _draw_cache[id(s)] = v
     return v
 
 
 def pop_value(s):
-    return (max(3.0, income(s) * 12) * (1 + 0.35 * ulv(s, "magnet")) * (1 + 0.25 * tlv(s, "lucky"))
-            * (1 + ulv(s, "polish")) * (1 + 0.4 * ulv(s, "spooky")))
+    return max(3.0, base_income(s) * 12) * bubble_power(s)         # unchanged by the fish boost
 
 
 def pop_interval(s):

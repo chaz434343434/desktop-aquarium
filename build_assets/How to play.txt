@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.6.0)
+DESKTOP AQUARIUM  (version 1.6.1)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -9,6 +9,8 @@ STARTING IT
 THE BASICS
   - Click a catfish to pet it. You get scales (the money), and it gets happier.
   - Pop the floating bubbles - click each one. Golden ones are worth 10x.
+  - Bubble upgrades (Bubble Magnet, Scale Polish, Bubble Machine, Lucky Moss) also power up
+    your fish: the more your bubbles are worth, the more scales your fish shed.
   - Feed your fish with the food buttons next to your scales.
   - Open the Shop to buy new catfish, toys, upgrades and tank themes.
   - Fish play with toys and shed scales when they do.

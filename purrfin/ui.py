@@ -301,7 +301,8 @@ class UI:
         scr.blit(amt, (x + 34, y1 + (STRIP_H - amt.get_height()) // 2 + 1))
         scr.blit(rate, (x + 34 + amt_w + 8, y1 + (STRIP_H - rate.get_height()) // 2 + 1))
         tip = [f"Scales: {E.fmt(s['bubbles'])}", f"Earning: {E.fmt(g.real_rate())} scales/s", f"(fish {E.fmt(E.income(s))}/s + toys, bubbles, pets)",
-               f"All bonuses: x{E.global_mult(s):.2f}", f"Lifetime: {E.fmt(s['earned_total'])}"]
+               f"All bonuses: x{E.global_mult(s):.2f}", f"Bubble power boosts fish: x{E.fmt(E.fish_boost(s))}",
+               f"Lifetime: {E.fmt(s['earned_total'])}"]
         if s["pearls"]:
             tip.append(f"Pearls: {s['pearls']} to spend (Shop > Pearls)")
         self.tips.append((pill, tip))
@@ -331,6 +332,7 @@ class UI:
             self.box(scr, b, (50, 52, 64))
             self.text(scr, "?", self.f_norm, DIM, (b.centerx, b.centery + 1), "center")
             self.tips.append((b, ["New food", f"Unlocks at {E.fmt(nxt['unlock'])} lifetime scales"]))
+        row1_end = x + (STRIP_H + 4 if nxt else 0)
         # ---- row 2: menu buttons on the right
         bx = r.right - 4
         specs = [("x", g.quit, 30, BAD, "Save & quit"), ("_", self.minimize, 30, NAV, "Hide tank"),
@@ -380,17 +382,31 @@ class UI:
                 or (lab == "Fishdex" and self.panel == "dex")                 or (lab == "Options" and self.panel == "settings")
             self.button(scr, (bx, y2, w, STRIP_H), lab, cb, col=_lighten(col, 0.25) if active else col, tip=tip)
             bx -= 4
-        # ---- buffs to the left of the buttons
+        # ---- buff timers: left of the buttons if there's room, else right of the foods, else a row above.
+        # (With Scratch!, Collect and Hatchery showing there often isn't room left of the buttons.)
         names = {"double": ("2x", ACC), "frenzy": ("Frenzy", (255, 160, 120)), "bliss": ("Bliss", (140, 220, 140))}
+        fx = row1_end + 4                       # next free spot right of the foods
+        ax = r.right - 4                        # next free spot on the row above (right to left)
         for b, t in s["buffs"].items():
             lab, col = names.get(b, (b, TEXT))
             img = self.f_small.render(f"{lab} {E.fmt_time(t)}", True, col)
-            w = img.get_width() + 16
-            bx -= w
-            rr = pygame.Rect(bx, y2 + 3, w, STRIP_H - 6)
+            w = max(img.get_width(), self.f_small.size(f"{lab} 88m 88s")[0]) + 16     # fixed width: no jiggling
+            if bx - w >= 4:
+                bx -= w
+                rr = pygame.Rect(bx, y2 + 3, w, STRIP_H - 6)
+                bx -= 4
+            elif fx + w <= r.right - 4:
+                rr = pygame.Rect(fx, y1 + 3, w, STRIP_H - 6)
+                fx += w + 4
+            else:
+                ax -= w
+                above = y2 - STRIP_H + 1
+                if above < 0:                   # Mac's short window has no room above: over the water instead
+                    above = r.y + 4
+                rr = pygame.Rect(ax, above, w, STRIP_H - 6)
+                ax -= 4
             self.box(scr, rr, BG)
             scr.blit(img, img.get_rect(center=(rr.centerx, rr.centery + 1)))
-            bx -= 4
 
     def draw_toasts(self, scr):
         g = self.g
@@ -456,7 +472,7 @@ class UI:
             self.text(scr, lab, self.f_small, DIM, (rr.x + 12, yy))
             self.bar(scr, (rr.x + 74, yy + 2, w - 88, 12), k, col)
             yy += 18
-        self.text(scr, f"+{E.fmt(E.fish_rate(g.state, f) * E.global_mult(g.state))}/s  click to pet!",
+        self.text(scr, f"+{E.fmt(E.fish_rate(g.state, f) * E.fish_mult(g.state))}/s  click to pet!",
                   self.f_small, (170, 220, 250), (rr.x + 12, yy + 2))
         if f.get("grow"):
             self.text(scr, f"Baby! Grows up in {E.fmt_time(f['grow'])}", self.f_small, (150, 230, 160),
@@ -767,7 +783,7 @@ class UI:
             ever = sp["id"] in s.get("seasonal_owned", [])
             note = f"{season} special! One per tank." if E.in_season(sp["season"]) else "One per tank."
             fish = next((f for f in s["fish"] if f["sp"] == sp["id"]), None)
-            each = E.fish_rate(s, fish or dict(sp=sp["id"], lv=1, happy=70, full=80)) * E.global_mult(s)
+            each = E.fish_rate(s, fish or dict(sp=sp["id"], lv=1, happy=70, full=80)) * E.fish_mult(s)
             lines = [(f"{E.fmt(each)}/s  -  2x your best catfish. {note}", (255, 170, 80)), sp["blurb"]]
             if why == "owned":
                 lab, ok = "In tank", False
@@ -788,7 +804,7 @@ class UI:
             own = E.owned_count(s, sp["id"])
             if known:
                 icon = sprites.fish_icon(sp["id"], 3)
-                lines = [(f"{E.fmt(sp['rate'] * E.global_mult(s))}/s each  -  you have {own}", (170, 220, 250)),
+                lines = [(f"{E.fmt(sp['rate'] * E.fish_mult(s))}/s each  -  you have {own}", (170, 220, 250)),
                          sp["blurb"]]
                 lab = "Tank full" if full else E.fmt(c)
                 self.row(scr, view, y, icon, sp["name"] + ("" if sp["id"] in s["dex"] else "  NEW!"), lines,
@@ -961,7 +977,7 @@ class UI:
     def tab_mine(self, scr, view, y):
         g, s = self.g, self.g.state
         y0 = y
-        gm = E.global_mult(s)
+        gm = E.fish_mult(s)
         for f in sorted(s["fish"], key=lambda f: -E.fish_rate(s, f)):
             sp = SPECIES_BY_ID[f["sp"]]
             rr = pygame.Rect(view.x + 4, y, view.w - 14, ROW_H - 4)
@@ -1170,7 +1186,7 @@ class UI:
                   self.f_norm, ACC, (rr.x + 150, rr.y + 10))
         self.text(scr, "Your tank is full! Sell this baby, or sell a fish below to make room.", self.f_small,
                   TEXT, (rr.x + 150, rr.y + 34))
-        grown = E.fish_rate(s, dict(b, grow=0)) * E.global_mult(s)
+        grown = E.fish_rate(s, dict(b, grow=0)) * E.fish_mult(s)
         self.text(scr, f"Earns +{E.fmt(grown)}/s grown  (+{E.fmt(grown * 0.25)}/s as a fry)", self.f_small,
                   (170, 220, 250), (rr.x + 150, rr.y + 52))
         more = len(s["pending"]) - 1
@@ -1182,7 +1198,7 @@ class UI:
         y += 100
         self.text(scr, "Or sell one of these to keep the baby:", self.f_norm, TEXT, (view.x + 8, y + 2))
         y += 26
-        gm = E.global_mult(s)
+        gm = E.fish_mult(s)
         for f in sorted(s["fish"], key=lambda f: E.fish_rate(s, f)):
             fsp = SPECIES_BY_ID[f["sp"]]
             row = pygame.Rect(view.x + 4, y, view.w - 16, 48)

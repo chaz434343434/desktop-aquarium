@@ -141,7 +141,7 @@ class Game:
         if self.compact:
             # Mac: the window can't be see-through, so the tank fills it edge to edge (no empty box
             # beside it). That means it's at least as wide as the row of buttons above it.
-            tw = max(tw, int(800 * max(1.0, ui_k)))
+            tw = max(tw, int(920 * max(1.0, ui_k)))        # every HUD button fits, Update! included
         tw = min(tw, m["w"]) // self.S * self.S
         th = TANK_H * self.S
         if st["align"] == "left":
@@ -269,7 +269,7 @@ class Game:
 
     def show_shedding(self, dt):
         """income is credited every frame; every few seconds each fish shows what it made"""
-        g = E.global_mult(self.state)
+        g = E.fish_mult(self.state)
         for a in self.tank.fish.values():
             a.shed += E.fish_rate(self.state, a.f) * g * dt
             a.shed_t -= dt

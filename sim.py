@@ -18,7 +18,8 @@ def play_income(s):
     if not s["toys"]:
         return 0.0
     avg = sum(TOYS_BY_ID[t]["pay"] * (1 + 0.5 * (v["lv"] - 1)) for t, v in s["toys"].items()) / len(s["toys"])
-    return E.income(s) * PLAY_SHARE / E.PLAY_PULSE * avg
+    base = E.base_income(s) if hasattr(E, "base_income") else E.income(s)    # toys pay from the un-boosted rate
+    return base * PLAY_SHARE / E.PLAY_PULSE * avg
 
 
 def total_income(s):
