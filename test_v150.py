@@ -38,7 +38,7 @@ def shot(name, rect=None):
 
 g.toasts.clear()
 # ---- species
-check("60 catfish", len(SPECIES) == 60)
+check("at least 60 catfish", len(SPECIES) >= 60)
 check("Blue Channel Catfish comes right after the Galaxy Catfish", SPECIES[40]["id"] == "bluechannel")
 costs = [sp["cost"] for sp in SPECIES]
 check("every catfish costs more than the one before", all(b > a for a, b in zip(costs, costs[1:])))

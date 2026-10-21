@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.5.2)
+DESKTOP AQUARIUM  (version 1.6.0)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -51,7 +51,9 @@ THE LONG GAME
     upgrades, but earn Pearls.
   - Spend Pearls in the Pearl Tree for bonuses that last forever: more scales, faster eggs,
     a head start, luckier bubbles and more.
-  - There are 60 catfish to collect, including the Blue Channel Catfish, drawn by a friend.
+  - There are 100 catfish to collect, including the Blue Channel Catfish, drawn by a friend.
+    Number 100 is the Infinity Catfish. Prices count up through names like Dc (decillion),
+    Vg (vigintillion), Tg (trigintillion) all the way to Ce (centillion).
     After the Moonlight Catfish, giant river catfish and
     mythical ones (Aurora, Galaxy) appear, along with late-game toys and upgrades that unlock
     as your tank gets richer.
