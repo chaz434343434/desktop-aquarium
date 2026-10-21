@@ -310,21 +310,64 @@ def look_species(sp, look):
     return s
 
 
+ART = {}            # species id -> (palette, frames, anchor): hand-drawn pixel art
+
+
+def _load_art():
+    from .art_blue_channel import BLUE_CHANNEL_PALETTE, BLUE_CHANNEL_FRAMES
+    # frames as drawn: 0 tail up, 1 tail down, 2 in between -> swim cycle up, middle, down, middle
+    order = [BLUE_CHANNEL_FRAMES[i] for i in (0, 2, 1, 2)]
+    ART["bluechannel"] = (BLUE_CHANNEL_PALETTE, order, (17, 10))
+
+
+_load_art()
+
+
+def _art_colour(sp_id, col, shiny, look):
+    """recolour hand-drawn pixels the same way generated fish get their look / shiny colours"""
+    if col == (0, 0, 0):
+        return col
+    if look:
+        col = _nudge(col, look[0], look[1])
+    if shiny:
+        sp = SPECIES_BY_ID[sp_id]
+        col = lerp(_rot(col), SHINY_TINTS[sp["tier"] % len(SHINY_TINTS)], 0.45)
+    return col
+
+
+def art_fish(sp_id, shiny, look):
+    pal, frames, anchor = ART[sp_id]
+    cols = {k: _art_colour(sp_id, c, shiny, look) for k, c in pal.items()}
+    out = []
+    for rows in frames:
+        s = pygame.Surface((len(rows[0]), len(rows)), pygame.SRCALPHA)
+        for y, row in enumerate(rows):
+            for x, ch in enumerate(row):
+                if ch != ".":
+                    s.set_at((x, y), (*cols[ch], 255))
+        out.append(s)
+    return out, anchor
+
+
 def fish_frames(sp_id, shiny=False, look=None):
-    """dict: frames[(facing_right, inverted)] -> [surf0, surf1]"""
+    """dict: frames[(facing_right, inverted)] -> [surf0, surf1, ...] (2 for generated fish, 4 for drawn ones)"""
     key = (sp_id, bool(shiny), tuple(look) if look else None)
     if key not in _cache:
-        sp = SPECIES_BY_ID[sp_id]
-        if look:
-            sp = look_species(sp, look)
-        if shiny:
-            sp = shiny_species(sp)
-        (b0, (ax, ay)), (b1, _) = build_fish(sp, 0), build_fish(sp, 1)
-        W, H = b0.get_size()
+        if sp_id in ART:
+            bs, (ax, ay) = art_fish(sp_id, shiny, look)
+        else:
+            sp = SPECIES_BY_ID[sp_id]
+            if look:
+                sp = look_species(sp, look)
+            if shiny:
+                sp = shiny_species(sp)
+            (b0, (ax, ay)), (b1, _) = build_fish(sp, 0), build_fish(sp, 1)
+            bs = (b0, b1)
+        W, H = bs[0].get_size()
         out = {}
         for right in (True, False):
             for inv in (False, True):
-                fr = [b if right else pygame.transform.flip(b, True, False) for b in (b0, b1)]
+                fr = [b if right else pygame.transform.flip(b, True, False) for b in bs]
                 if inv:
                     fr = [pygame.transform.flip(b, False, True) for b in fr]
                 out[(right, inv)] = fr
@@ -598,6 +641,43 @@ def draw_toy(surf, tid, cx, by, t=0.0, extra=0.0):
         D.line(surf, (220, 140, 120), (cx - 6, by - 1), (cx + 6, by - 7))
         D.line(surf, (255, 225, 210), (cx + 3, by - 6), (cx + 8, by - 3))
         surf.set_at((cx + 7, by - 8), (200, 120, 110))
+    elif tid == "jackolantern":
+        D.ellipse(surf, (226, 116, 24), (cx - 7, by - 10, 14, 10))
+        D.line(surf, (196, 96, 20), (cx - 2, by - 9), (cx - 2, by - 2))
+        D.line(surf, (196, 96, 20), (cx + 2, by - 9), (cx + 2, by - 2))
+        D.rect(surf, (70, 120, 40), (cx - 1, by - 13, 2, 3))
+        glow = lerp((255, 180, 40), (255, 245, 150), 0.5 + 0.5 * math.sin(t * 7))
+        for p in ((cx - 4, by - 7), (cx - 3, by - 7), (cx + 3, by - 7), (cx + 4, by - 7), (cx - 4, by - 6), (cx + 3, by - 6)):
+            surf.set_at(p, glow)
+        for x in range(cx - 4, cx + 5):
+            surf.set_at((x, by - 4 + (1 if x % 2 else 0)), glow)
+    elif tid == "cauldron":
+        D.ellipse(surf, (40, 40, 48), (cx - 8, by - 9, 16, 9))
+        D.rect(surf, (40, 40, 48), (cx - 7, by - 10, 14, 3))
+        D.line(surf, (70, 70, 80), (cx - 8, by - 10), (cx + 7, by - 10))
+        brew = lerp((90, 210, 80), (150, 250, 110), 0.5 + 0.5 * math.sin(t * 5))
+        D.line(surf, brew, (cx - 6, by - 9), (cx + 5, by - 9))
+        surf.set_at((cx - 3 + int(t * 3) % 7, by - 10), (180, 255, 150))
+        surf.set_at((cx - 6, by), (30, 30, 36))
+        surf.set_at((cx + 5, by), (30, 30, 36))
+    elif tid == "skeleton":
+        bone, dk = (232, 228, 214), (170, 165, 150)
+        D.line(surf, bone, (cx - 8, by - 4), (cx + 4, by - 4))
+        for k in range(4):
+            x = cx - 6 + k * 3
+            D.line(surf, bone, (x, by - 7), (x, by - 1))
+        D.polygon(surf, bone, [(cx + 4, by - 7), (cx + 9, by - 5), (cx + 4, by - 3)])
+        surf.set_at((cx + 6, by - 5), (40, 30, 30))
+        jaw = 1 if extra > 0 else 0
+        D.line(surf, dk, (cx + 5, by - 2 + jaw), (cx + 9, by - 3 + jaw))
+        D.polygon(surf, dk, [(cx - 8, by - 4), (cx - 11, by - 7), (cx - 11, by - 1)])
+    elif tid == "candycorn":
+        for i, (dx, h) in enumerate(((-6, 0), (-1, 1), (4, 0), (-3, 3), (2, 3))):
+            x, y = cx + dx, by - h
+            surf.set_at((x, y - 3), (255, 250, 235))
+            D.line(surf, (255, 170, 30), (x - 1, y - 2), (x + 1, y - 2))
+            D.line(surf, (255, 215, 60), (x - 1, y - 1), (x + 1, y - 1))
+            D.line(surf, (255, 215, 60), (x - 1, y), (x + 1, y))
     elif tid == "anchor":
         iron, dk = (110, 110, 120), (70, 70, 80)
         D.line(surf, iron, (cx, by - 14), (cx, by - 2))
@@ -778,7 +858,8 @@ def draw_toy(surf, tid, cx, by, t=0.0, extra=0.0):
                 surf.set_at((x, y), (200, 235, 255))
 
 
-TOY_SIZE = {"ball": (8, 8), "airstone": (8, 5), "cave": (22, 14), "sunflower": (12, 24),
+TOY_SIZE = {"jackolantern": (16, 14), "cauldron": (18, 12), "skeleton": (24, 9), "candycorn": (14, 6),
+            "ball": (8, 8), "airstone": (8, 5), "cave": (22, 14), "sunflower": (12, 24),
             "marimo": (10, 10), "chest": (14, 14), "hammock": (16, 18), "castle": (22, 24),
             "clam": (14, 10), "ship": (30, 26), "coral": (16, 20), "diver": (12, 26),
             "apple": (10, 12), "lilypad": (16, 6), "waterfall": (16, 50), "volcano": (20, 12),
@@ -840,6 +921,9 @@ UPGRADE_GLYPH = {
     "bait": ["   X  ", "   X  ", "   X  ", "X  X  ", "XooX  ", " XX   "],
     "infinity": ["      ", " X  X ", "XoXXoX", "XoXXoX", " X  X ", "      "],
     "rub": [" X X X", " X X X", "XXXXXX", "XXXXXX", "o XXX ", " o  o "],
+    "ghostglow": [" XXXX ", "XXXXXX", "X.XX.X", "XXXXXX", "XXXXXX", "X X X "],
+    "spooky": [" XXX  ", "XXXXX ", "X.X.X ", "XXXXX ", " X X o", "    oo"],
+    "treats": ["  X   ", " XXX  ", "XoXoX ", "XXXXX ", "XoXoX ", " XXX  "],
 }
 UPGRADE_COL = {"tank": (120, 200, 255), "filter": (150, 160, 180), "hands": (250, 200, 170),
                "magnet": (230, 80, 80), "bubbler": (130, 210, 240), "heater": (240, 120, 60),
@@ -849,7 +933,8 @@ UPGRADE_COL = {"tank": (120, 200, 255), "filter": (150, 160, 180), "hands": (250
                "abyss": (60, 90, 170), "school": (120, 200, 230), "polish": (240, 240, 255),
                "current": (90, 170, 230), "timecrystal": (200, 140, 255), "bait": (230, 120, 90),
                "infinity": (255, 180, 230), "autonest": (200, 170, 250),
-               "rub": (255, 170, 210)}
+               "rub": (255, 170, 210), "ghostglow": (170, 250, 190), "spooky": (235, 232, 240),
+               "treats": (255, 160, 50)}
 
 
 def upgrade_icon(uid, scale=4):

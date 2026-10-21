@@ -283,6 +283,30 @@ class Game:
         E.earn(self.state, val)
         self.tank.float_text(p.x, p.y + 2, "+" + E.fmt(val), (190, 225, 250))
 
+    def report(self, kind):
+        """Options > Bugs & Support: opens a pre-filled GitHub issue in the web browser"""
+        import platform
+        import urllib.parse
+        import webbrowser
+        from .version import UPDATE_REPO
+        s = self.state
+        info = (f"Version {VERSION} on {platform.system()} {platform.release()} ({platform.machine()})\n"
+                f"Fish: {len(s['fish'])}, scales: {E.fmt(s['bubbles'])}, playtime: {E.fmt_time(s['stats']['playtime'])}")
+        if kind == "bug":
+            title = "Bug: "
+            body = ("**What happened?**\n\n\n**What did you do just before?**\n\n\n"
+                    "(A screenshot helps a lot - you can paste one right here.)\n\n---\n" + info)
+        else:
+            title = "Help: "
+            body = "**What do you need help with?**\n\n\n---\n" + info
+        url = (f"https://github.com/{UPDATE_REPO}/issues/new?"
+               + urllib.parse.urlencode({"title": title, "body": body}))
+        try:
+            webbrowser.open(url)
+            self.toast("Opened GitHub in your browser. Write what happened and press Create!", (200, 220, 255), 6)
+        except Exception:
+            self.toast(f"Couldn't open the browser. Go to github.com/{UPDATE_REPO}/issues", (255, 170, 150), 8)
+
     def check_updates(self):
         """the Options button"""
         if not self.updater.enabled:
@@ -545,10 +569,6 @@ class Game:
         if low is None:
             return
         if buttons[0]:
-            # hovering over pop-bubbles while dragging pops them too
-            p = self.tank.pop_at(*low)
-            if p:
-                self.pop(p)
             if self.rub in ("armed", "active") and not (self.drag_spot or self.drag_toy):
                 a = self.tank.fish_at(*low)
                 if a:
@@ -608,8 +628,11 @@ class Game:
         u = UPGRADES_BY_ID[uid]
         if E.ulv(s, uid) >= u["max"]:
             return
+        if not E.seasonal_ok(s, u):
+            return self.deny(f"Only for sale at {SEASONS[u['season']]['name']}.")
         if not E.spend(s, E.upgrade_cost(s, uid)):
             return self.deny("Not enough scales.")
+        E.remember_seasonal(s, u)
         s["upgrades"][uid] = E.ulv(s, uid) + 1
         if uid == "infinity":
             self.toast(f"Infinity Tank! Room for {E.capacity(s)} catfish.", (150, 230, 160), 5)
@@ -749,7 +772,7 @@ class Game:
             return
         kind = v["v"]
         amt = (max(25.0, E.income(self.state) * kind["secs"]) * (1 + 0.5 * E.tlv(self.state, "friends"))
-               * (1 + E.ulv(self.state, "bait")))
+               * (1 + E.ulv(self.state, "bait")) * (1 + 0.6 * E.ulv(self.state, "treats")))
         E.earn(self.state, amt)
         st = self.state["stats"]
         st["visitors"] = st.get("visitors", 0) + 1
@@ -850,8 +873,11 @@ class Game:
         s = self.state
         if E.toy_lv(s, tid) >= TOY_MAX_LEVEL:
             return
+        if not E.seasonal_ok(s, TOYS_BY_ID[tid]):
+            return self.deny(f"Only for sale at {SEASONS[TOYS_BY_ID[tid]['season']]['name']}.")
         if not E.spend(s, E.toy_cost(s, tid)):
             return self.deny("Not enough scales.")
+        E.remember_seasonal(s, TOYS_BY_ID[tid])
         if tid in s["toys"]:
             s["toys"][tid]["lv"] += 1
         else:

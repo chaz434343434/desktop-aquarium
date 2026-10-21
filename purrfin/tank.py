@@ -6,7 +6,7 @@ import time
 import pygame
 
 from . import sprites
-from .data import SPECIES_BY_ID, TOYS, CLUTCHES_BY_ID, THEMES_BY_ID, VISITORS, VISIT_EVERY, SKULL_POP_EVERY
+from .data import SPECIES_BY_ID, TOYS, TOYS_BY_ID, CLUTCHES_BY_ID, THEMES_BY_ID, VISITORS, VISIT_EVERY, SKULL_POP_EVERY
 from . import economy as E
 from .sprites import lerp, dark, light
 
@@ -236,7 +236,7 @@ class FishActor:
     def draw(self, surf, time):
         shiny, look = self.f.get("shiny", False), E.fish_look(self.f)
         frames = sprites.fish_frames(self.f["sp"], shiny, look)[(self.facing, self.inverted)]
-        img = frames[int(self.anim) % 2]
+        img = frames[int(self.anim) % len(frames)]
         ax, ay = sprites.fish_anchor(self.f["sp"], self.facing, self.inverted, shiny, look)
         bob = math.sin(time * 2 + self.phase) * 0.5 if self.state != "rest" else 0
         wig = math.sin(time * 40) * 0.6 if self.pet_t > 0 else 0
@@ -416,7 +416,11 @@ class Tank:
         for tid, st in self.state["toys"].items():
             if tid not in self.toys:
                 if "x" not in st:
-                    st["x"] = (order.index(tid) + 0.5) / len(order) * 0.9 + 0.05
+                    if TOYS_BY_ID[tid].get("season"):      # seasonal ones would all bunch up at the end
+                        same = [t["id"] for t in TOYS if t.get("season") == TOYS_BY_ID[tid]["season"]]
+                        st["x"] = 0.14 + 0.24 * same.index(tid)
+                    else:
+                        st["x"] = (order.index(tid) + 0.5) / len(order) * 0.9 + 0.05
                 a = ToyActor(tid, st)
                 self.toys[tid] = a
             a = self.toys[tid]
@@ -517,7 +521,8 @@ class Tank:
         if v is None:
             self.visit_timer -= dt
             if self.visit_timer <= 0 and self.fish:
-                self.visit_timer = random.uniform(*VISIT_EVERY) / (1 + 0.15 * E.tlv(self.state, "friends"))
+                self.visit_timer = (random.uniform(*VISIT_EVERY) / (1 + 0.15 * E.tlv(self.state, "friends"))
+                                    / (1 + 0.2 * E.ulv(self.state, "treats")))
                 kind = random.choices(VISITORS, weights=[x["weight"] for x in VISITORS])[0]
                 right = random.random() < 0.5
                 y = self.sand_y - 1 if kind["where"] == "sand" else random.uniform(WATER_TOP + 10, self.sand_y - 12)
@@ -745,6 +750,18 @@ class Tank:
                     self.rings.append([a.x + 7, a.y - 6, 0.0])
             elif a.tid == "lighthouse" or a.tid == "bottle":
                 pass
+            elif a.tid == "cauldron":
+                if random.random() < dt * 4:
+                    self.add_decor_bubble(a.x + random.uniform(-3, 3), a.y - 7, random.random() < 0.3)
+                if a.timer <= 0:
+                    a.timer = max(25, 70 - 4 * lv)
+                    if not s["chill"] and len(self.pops) < 14:
+                        self.pops.append(PopBubble(a.x, a.y - 8, skull=True))
+            elif a.tid == "skeleton":
+                a.open = max(0.0, a.open - dt)
+                if a.timer <= 0 and any(abs(f.x - a.x) < 12 for f in self.fish.values()):
+                    a.timer = random.uniform(2, 5)
+                    a.open = 0.6
             elif a.tid in ("geyser", "fountain", "waterfall"):
                 if random.random() < dt * (6 if a.tid == "geyser" else 3):
                     self.add_decor_bubble(a.x + random.uniform(-3, 3), a.y - (6 if a.tid == "geyser" else 3))
@@ -802,7 +819,7 @@ class Tank:
             self.draw_lanterns(s, t)
         for a in self.toys.values():
             if a.tid not in ("ball",):
-                extra = a.open if a.tid in ("chest", "clam") else a.roll
+                extra = a.open if a.tid in ("chest", "clam", "skeleton") else a.roll
                 sprites.draw_toy(s, a.tid, a.x, a.y, t, extra)
         st = self.state
         if E.ulv(st, "jar"):

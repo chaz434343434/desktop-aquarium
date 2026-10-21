@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.4.5)
+DESKTOP AQUARIUM  (version 1.5.0)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -8,7 +8,7 @@ STARTING IT
 
 THE BASICS
   - Click a catfish to pet it. You get scales (the money), and it gets happier.
-  - Pop the floating bubbles. Golden ones are worth 10x.
+  - Pop the floating bubbles - click each one. Golden ones are worth 10x.
   - Feed your fish with the food buttons next to your scales.
   - Open the Shop to buy new catfish, toys, upgrades and tank themes.
   - Fish play with toys and shed scales when they do.
@@ -35,20 +35,23 @@ WHEN YOU COME BACK
 
 HOLIDAY SPECIALS
   - Some things are only for sale during a holiday (by your computer's date).
-    Halloween (October 1 - November 2): the Haunted Lagoon theme and the Pumpkin Catfish.
+    Halloween (October 1 - November 2): the Haunted Lagoon theme, the Pumpkin Catfish,
+    4 spooky toys (Jack-o'-Lantern, Witch's Cauldron, Fishbone Skeleton, Candy Corn) and
+    3 upgrades (Ghostly Glow, Spooky Bubbles, Trick-or-Treat).
   - The Haunted Lagoon has gravestones, glowing jack-o'-lanterns and a friendly ghost.
     Its pop-bubbles are skulls worth 2x, and it gives +10% scales forever.
   - The Pumpkin Catfish earns twice as much as your best catfish and blows skull bubbles
     worth 3x. One per tank.
-  - Once you've bought them, they're yours: the theme stays, and the Pumpkin Catfish can be
-    bought again after a Spawning Season, any time of year.
+  - Once you've bought them, they're yours: the theme stays, and the Pumpkin Catfish, toys and
+    upgrades can be bought again after a Spawning Season, any time of year.
 
 THE LONG GAME
   - Later on, Shop > Pearls lets you start a new Spawning Season. You lose your fish and
     upgrades, but earn Pearls.
   - Spend Pearls in the Pearl Tree for bonuses that last forever: more scales, faster eggs,
     a head start, luckier bubbles and more.
-  - There are 40 catfish to collect. After the Moonlight Catfish, giant river catfish and
+  - There are 60 catfish to collect, including the Blue Channel Catfish, drawn by a friend.
+    After the Moonlight Catfish, giant river catfish and
     mythical ones (Aurora, Galaxy) appear, along with late-game toys and upgrades that unlock
     as your tank gets richer.
 
@@ -63,6 +66,7 @@ GOOD TO KNOW
     The game also slows itself down while a full-screen video or game is in front of it.
   - Drag the dotted bar at the top of the Shop/Fishdex to move it.
   - The game saves by itself. Click the red x on the tank to save and close.
+  - Found a bug or need help? Options > Bugs & Support opens GitHub in your browser.
   - Updates: when a new version is out, an "Update!" button appears. Click it and the game
     updates itself and reopens. Your fish are kept.
     You can also check any time: Options > Updates > "Check for updates".

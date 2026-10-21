@@ -194,11 +194,27 @@ def species_cost(s, sp_id):
 
 def upgrade_cost(s, uid):
     u = UPGRADES_BY_ID[uid]
+    if u.get("cost_secs"):                       # seasonal: priced from your income, so useful at any stage
+        return max(u["base"], income(s) * u["cost_secs"]) * u["growth"] ** ulv(s, uid)
     return u["base"] * u["growth"] ** ulv(s, uid)
 
 
+def seasonal_ok(s, item):
+    """seasonal toy/upgrade: for sale in its season, or any time once you've owned one"""
+    return (not item.get("season") or in_season(item["season"])
+            or item["id"] in s.get("seasonal_owned", []))
+
+
+def remember_seasonal(s, item):
+    if item.get("season") and item["id"] not in s.setdefault("seasonal_owned", []):
+        s["seasonal_owned"].append(item["id"])
+
+
 def toy_cost(s, tid):
-    return TOYS_BY_ID[tid]["cost"] * TOY_LEVEL_GROWTH ** toy_lv(s, tid)
+    t = TOYS_BY_ID[tid]
+    if t.get("cost_secs"):
+        return max(t["cost"], income(s) * t["cost_secs"]) * TOY_LEVEL_GROWTH ** toy_lv(s, tid)
+    return t["cost"] * TOY_LEVEL_GROWTH ** toy_lv(s, tid)
 
 
 def food_cost(s, fid):
@@ -283,6 +299,7 @@ def global_mult(s):
     m *= 1 + 0.03 * len(s["dex"])
     m *= 1 + sum(THEMES_BY_ID[t]["bonus"] for t in s.get("themes", []) if t in THEMES_BY_ID) / 100
     m *= 1 + PEARL_BONUS * tlv(s, "gills")
+    m *= 1 + 0.10 * ulv(s, "ghostglow")
     if "double" in s["buffs"]:
         m *= 2
     return m
@@ -312,7 +329,8 @@ def income(s):
 
 
 def pop_value(s):
-    return max(3.0, income(s) * 12) * (1 + 0.35 * ulv(s, "magnet")) * (1 + 0.25 * tlv(s, "lucky")) * (1 + ulv(s, "polish"))
+    return (max(3.0, income(s) * 12) * (1 + 0.35 * ulv(s, "magnet")) * (1 + 0.25 * tlv(s, "lucky"))
+            * (1 + ulv(s, "polish")) * (1 + 0.4 * ulv(s, "spooky")))
 
 
 def pop_interval(s):
@@ -506,6 +524,8 @@ def hatch(s, egg):
 def upgrade_visible(s, uid):
     """far-off late-game upgrades stay hidden until you're within reach of them"""
     u = UPGRADES_BY_ID[uid]
+    if u.get("season"):
+        return ulv(s, uid) > 0 or seasonal_ok(s, u)
     return ulv(s, uid) > 0 or u["base"] <= max(s["earned_total"], s["bubbles"]) * 50
 
 
@@ -558,10 +578,13 @@ def pearls_for(s):
 
 
 # ---------------------------------------------------------------- mutations
+MAX_SCALES = 1e300       # numbers stop just short of where the computer's maths gives up (~1.8e308)
+
+
 def earn(s, amt):
-    s["bubbles"] += amt
-    s["earned_run"] += amt
-    s["earned_total"] += amt
+    s["bubbles"] = min(MAX_SCALES, s["bubbles"] + amt)
+    s["earned_run"] = min(MAX_SCALES, s["earned_run"] + amt)
+    s["earned_total"] = min(MAX_SCALES, s["earned_total"] + amt)
 
 
 def spend(s, amt):
@@ -641,19 +664,37 @@ def species_known(s, i):
     return i <= best + 1
 
 
+def _units():
+    """short names for 10^3 ... 10^303: K, M, B, T, Qa ... Dc (decillion), Vg (vigintillion),
+    Tg (trigintillion) ... Ng (nonagintillion), Ce (centillion)"""
+    ones = ["", "U", "D", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No"]
+    tens = ["", "Dc", "Vg", "Tg", "Qag", "Qig", "Sxg", "Spg", "Og", "Ng"]
+    out = ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No"]       # 10^3 .. 10^30
+    for n in range(10, 100):                                               # n-illion, 10^(3n+3)
+        o, t = n % 10, n // 10
+        out.append(tens[t] if o == 0 else ones[o] + (tens[t].lower() if t > 1 else "d"))
+    out.append("Ce")                                                       # centillion, 10^303
+    return out
+
+
+UNITS = _units()
+
+
 def fmt(n):
     if n < 1000:
         if n < 10 and n != int(n):
             return f"{n:.1f}"
         return f"{int(n)}"
-    units = ["K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "Ud", "Dd", "Td", "Qad", "Qid",
-             "Sxd", "Spd", "Ocd", "Nod", "Vg"]
+    if n != n or n == float("inf"):
+        return "MAX"
     e = int(math.log10(n) // 3)
-    if e > len(units):
+    if e > len(UNITS):
         return f"{n:.2e}".replace("e+", "e")
     v = n / 1000 ** e
+    if v >= 999.5 and e < len(UNITS):          # 999.7K would round to "1000K": show 1.00M instead
+        e, v = e + 1, v / 1000
     s = f"{v:.2f}" if v < 10 else f"{v:.1f}" if v < 100 else f"{int(v)}"
-    return s + units[e - 1]
+    return s + UNITS[e - 1]
 
 
 def fmt_time(sec):

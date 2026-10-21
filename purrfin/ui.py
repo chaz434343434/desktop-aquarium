@@ -274,8 +274,8 @@ class UI:
         amt = self.f_big.render(E.fmt(s["bubbles"]), True, SCALE_COL)
         rate = self.f_small.render(f"+{E.fmt(g.real_rate())}/s", True, (170, 220, 250))
         # fixed widths (widest possible number) so the food buttons never shift
-        amt_w = self.f_big.size("888.8Mm")[0]
-        rate_w = self.f_small.size("+888.8Mm/s")[0]
+        amt_w = max(self.f_big.size("888" + u)[0] for u in E.UNITS)
+        rate_w = max(self.f_small.size("+888" + u + "/s")[0] for u in E.UNITS)
         pill_w = 34 + amt_w + 8 + rate_w + 12
         foods = []
         nxt = None
@@ -724,9 +724,10 @@ class UI:
                   self.f_small, DIM, (view.x + 8, y + 2))
         y += 24
         unowned = 0
-        for t in TOYS:
+        seasonal = [t for t in TOYS if t.get("season") and (E.toy_lv(s, t["id"]) or E.seasonal_ok(s, t))]
+        for t in seasonal + [t for t in TOYS if not t.get("season")]:
             lv = E.toy_lv(s, t["id"])
-            if lv == 0:
+            if lv == 0 and not t.get("season"):
                 unowned += 1
                 if unowned > 2:
                     break
@@ -739,8 +740,11 @@ class UI:
                      (f"Pays up to {E.fmt(pay)} scales every time a fish plays with it" if lv else
                       f"{t['desc']} Fish that play with it shed scales!", (255, 214, 90) if lv else DIM)]
             lab = "MAX" if maxed else (("Buy " if lv == 0 else "Up ") + E.fmt(c))
+            if t.get("season") and not lv:
+                lines[0] = (f"{SEASONS[t['season']]['name']} special!  +{t['bonus']}% scales per level", (255, 170, 80))
             self.row(scr, view, y, sprites.toy_icon(t["id"], 2), t["name"], lines, lab,
-                     lambda i=t["id"]: g.buy_toy(i), (not maxed) and g.can_afford(c))
+                     lambda i=t["id"]: g.buy_toy(i), (not maxed) and g.can_afford(c),
+                     tcol=(255, 170, 80) if t.get("season") else TEXT)
             y += ROW_H
         return y - y0
 
@@ -778,6 +782,12 @@ class UI:
             if not l:
                 return "Not built yet"
             return f"{E.egg_slots(s)} nest slot(s), hatch time x{E.hatch_speed(s):.2f}, rewards +{10 * (l - 1)}%"
+        if uid == "ghostglow":
+            return f"Now +{10 * l}% scales"
+        if uid == "spooky":
+            return f"Bubbles worth +{40 * l}%"
+        if uid == "treats":
+            return f"Visitors x{1 + 0.2 * l:.1f} as often, gifts +{60 * l}%"
         if uid == "rub":
             if not l:
                 return "Not learned yet"
@@ -809,7 +819,7 @@ class UI:
         g, s = self.g, self.g.state
         y0 = y
         hidden = 0
-        for u in UPGRADES:
+        for u in sorted(UPGRADES, key=lambda u: not u.get("season")):
             if not E.upgrade_visible(s, u["id"]):
                 hidden += 1
                 continue
@@ -1248,6 +1258,13 @@ class UI:
         sb(X, 80, "On", lambda: g.change_setting("nametags", True), st.get("nametags", True))
         sb(X + 86, 80, "Off", lambda: g.change_setting("nametags", False), not st.get("nametags", True))
         self.text(scr, "(names you give show above your fish)", self.f_small, DIM, (X + 182, y + 6))
+        y += 36
+        label("Bugs & Support")
+        self.button(scr, (X, y, 150, 28), "Report a bug", lambda: g.report("bug"), col=BAD,
+                    tip=["Report a bug", "Opens GitHub in your browser with", "your game version filled in"])
+        self.button(scr, (X + 156, y, 130, 28), "Get help", lambda: g.report("help"), col=NAV,
+                    tip=["Get help", "Ask a question on GitHub"])
+        self.text(scr, "(needs a free GitHub account)", self.f_small, DIM, (X + 296, y + 6))
         y += 36
         label("Performance")
         pw = st.get("power", "normal")
