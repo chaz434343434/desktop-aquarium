@@ -63,6 +63,10 @@ class UI:
         self.dex_sel = None
         self.grip_rect = None
         self.drag = None              # (dx, dy) grab offset while moving a panel
+        self.search = ""              # the Shop search box
+        self.search_rect = None
+        self.sb = None                # scrollbar: (track rect, thumb y, thumb h, max scroll, scroll key)
+        self.sb_drag = None           # grab offset inside the thumb while dragging it
         self.update_prompt = False
         self.k = 1.0
         self.W = self.H = 0
@@ -159,6 +163,10 @@ class UI:
         if button == 4 or button == 5:
             return False
         pos = self.ui_pos(pos)
+        if self.g.searching and not (self.search_rect and self.search_rect.collidepoint(pos)):
+            self.g.stop_search()                  # clicked away from the search box: stop typing
+        if self.scroll_click(pos):
+            return True
         for rect, cb in reversed(self.hits):
             if rect.collidepoint(pos):
                 cb()
@@ -624,6 +632,10 @@ class UI:
         if title:
             self.text(scr, title, self.f_big, ACC, (rr.x + 14, rr.y + 22))
         view = pygame.Rect(rr.x + 6, rr.y + 58, rr.w - 12, rr.h - 64)
+        self.search_rect = None
+        if self.panel == "shop" and (self.tab in ("fish", "toys", "upgrades", "themes") or self.tab.startswith("season:")):
+            self.draw_search(scr, pygame.Rect(view.x + 4, view.y, view.w - 16, 28))
+            view = pygame.Rect(view.x, view.y + 34, view.w, view.h - 34)
         self.view_h = view.h
         key = (self.panel, self.tab)
         off = self.scroll.get(key, 0)
@@ -643,12 +655,64 @@ class UI:
         mx = max(0, self.content_h - view.h)
         if off > mx:
             self.scroll[key] = mx
+        self.sb = None
         if mx > 0:
+            off = min(off, mx)
             k = view.h / self.content_h
-            sb_h = max(20, int(view.h * k))
+            sb_h = max(24, int(view.h * k))
             sb_y = view.y + int((view.h - sb_h) * (off / mx))
-            scr.fill(BORDER, (view.right - 6, view.y, 6, view.h))
-            scr.fill(GOOD, (view.right - 6, sb_y, 6, sb_h))
+            track = pygame.Rect(view.right - 10, view.y, 9, view.h)
+            self.sb = (track, sb_y, sb_h, mx, key)
+            hot = self.sb_drag is not None or (self.mouse is not None and track.inflate(6, 0).collidepoint(self.mouse))
+            scr.fill(BORDER, track)
+            scr.fill(_lighten(GOOD, 0.3) if hot else GOOD, (track.x, sb_y, track.w, sb_h))
+            for gy in (-3, 0, 3):                 # grip lines on the thumb
+                scr.fill(_darken(GOOD, 0.6), (track.x + 2, sb_y + sb_h // 2 + gy, track.w - 4, 1))
+
+    def draw_search(self, scr, r):
+        g = self.g
+        typing = g.searching
+        self.box(scr, r, (34, 40, 58) if typing else (28, 32, 46), border=ACC if typing else BORDER)
+        txt = self.search
+        if txt or typing:
+            caret = "_" if typing and int(g.now * 2) % 2 == 0 else ""
+            self.text(scr, txt + caret, self.f_norm, TEXT, (r.x + 30, r.y + 7))
+        else:
+            self.text(scr, "Search...", self.f_norm, DIM, (r.x + 30, r.y + 7))
+        # magnifying glass
+        pygame.draw.circle(scr, DIM, (r.x + 14, r.y + 12), 6, 2)
+        pygame.draw.line(scr, DIM, (r.x + 18, r.y + 16), (r.x + 22, r.y + 21), 3)
+        self.search_rect = r
+        self.hits.append((r, g.start_search))
+        if txt:
+            self.button(scr, (r.right - 30, r.y + 2, 26, 24), "x", self.clear_search, col=NAV, font=self.f_small,
+                        tip=["Clear search"])
+
+    def clear_search(self):
+        self.search = ""
+        self.g.stop_search()
+
+    def scroll_click(self, pos):
+        """grab the scrollbar thumb (or click the track to jump there)"""
+        if not self.sb:
+            return False
+        track, sb_y, sb_h, mx, key = self.sb
+        if not track.inflate(6, 0).collidepoint(pos):
+            return False
+        if sb_y <= pos[1] < sb_y + sb_h:
+            self.sb_drag = pos[1] - sb_y
+        else:
+            self.sb_drag = sb_h // 2
+            self.drag_scroll_to(pos)
+        return True
+
+    def drag_scroll_to(self, pos):
+        if not self.sb or self.sb_drag is None:
+            return
+        track, sb_y, sb_h, mx, key = self.sb
+        top = pos[1] - self.sb_drag
+        k = (top - track.y) / max(1, track.h - sb_h)
+        self.scroll[key] = int(max(0.0, min(1.0, k)) * mx)
 
     def row(self, scr, view, y, icon, title, lines, btn_label, btn_cb, enabled, tcol=TEXT, btn_col=GOOD,
             tip=None):
@@ -690,10 +754,14 @@ class UI:
                       ACC if n >= cap else TEXT, (view.x + 8, y + 2))
             self.text(scr, "New species give +3% scales forever.", self.f_small, DIM, (view.x + 8, y + 22))
             y += 42
+        found = 0
         for sp in SEASONAL_SPECIES:
             why = E.seasonal_fish_buyable(s, sp["id"])
             if why == "season" or sp["season"] != season:
                 continue                      # holiday fish live in their own tab
+            if not self.match(sp["name"], sp["blurb"]):
+                continue
+            found += 1
             c = E.species_cost(s, sp["id"])
             season = SEASONS[sp["season"]]["name"]
             ever = sp["id"] in s.get("seasonal_owned", [])
@@ -713,6 +781,9 @@ class UI:
             if not E.species_visible(s, i):
                 break
             known = E.species_known(s, i) or sp["id"] in s["dex"]
+            if not (known and self.match(sp["name"], sp["blurb"])) and self.search.strip():
+                continue                      # searching: only show catfish you know that match
+            found += 1
             c = E.species_cost(s, sp["id"])
             own = E.owned_count(s, sp["id"])
             if known:
@@ -727,7 +798,19 @@ class UI:
                 self.row(scr, view, y, icon, "???", ["Buy the species above to discover this one."],
                          None, None, False, DIM)
             y += ROW_H
+        if not season:
+            y += self.no_matches(scr, view, y, found)
         return y - y0
+
+    def match(self, name, *_):
+        """the Shop search box: does the name contain what was typed? (names only, so it finds what you meant)"""
+        q = self.search.strip().lower()
+        return not q or q in str(name).lower()
+
+    def section(self, scr, view, y, title, n):
+        """a small header over a group of rows (Bought / Not bought yet)"""
+        self.text(scr, f"{title}  ({n})", self.f_norm, ACC, (view.x + 8, y + 4))
+        return 28
 
     def tab_toys(self, scr, view, y, season=None):
         g, s = self.g, self.g.state
@@ -736,30 +819,42 @@ class UI:
             self.text(scr, f"Fish play with toys and shed scales. Total bonus +{int(E.toy_bonus(s) * 100)}%",
                       self.f_small, DIM, (view.x + 8, y + 2))
             y += 24
-        unowned = 0
         items = E.season_items(s, season)["toys"] if season else [t for t in TOYS if not t.get("season")]
-        for t in items:
-            lv = E.toy_lv(s, t["id"])
-            if lv == 0 and not t.get("season"):
-                unowned += 1
-                if unowned > 2:
-                    break
-            c = E.toy_cost(s, t["id"])
-            maxed = lv >= TOY_MAX_LEVEL
-            best = max(s["fish"], key=lambda f: E.fish_rate(s, f))
-            pay = E.toy_play_value(s, best, t["id"]) if lv else 0
-            nxt = f"  (next: +{t['bonus']}%)" if 0 < lv < TOY_MAX_LEVEL else ""
-            lines = [(f"Lv {lv}/{TOY_MAX_LEVEL}  +{t['bonus'] * lv}% scales{nxt}", (170, 220, 250)),
-                     (f"Pays up to {E.fmt(pay)} scales every time a fish plays with it" if lv else
-                      f"{t['desc']} Fish that play with it shed scales!", (255, 214, 90) if lv else DIM)]
-            lab = "MAX" if maxed else (("Buy " if lv == 0 else "Up ") + E.fmt(c))
-            if t.get("season") and not lv:
-                lines[0] = (f"{SEASONS[t['season']]['name']} special!  +{t['bonus']}% scales per level", (255, 170, 80))
-            self.row(scr, view, y, sprites.toy_icon(t["id"], 2), t["name"], lines, lab,
-                     lambda i=t["id"]: g.buy_toy(i), (not maxed) and g.can_afford(c),
-                     tcol=(255, 170, 80) if t.get("season") else TEXT)
-            y += ROW_H
+        owned = [t for t in items if E.toy_lv(s, t["id"])]
+        new = [t for t in items if not E.toy_lv(s, t["id"])]
+        if not season:
+            new = new[:2]                       # the next two to unlock; the rest stay a surprise
+        owned = [t for t in owned if self.match(t["name"], t["desc"])]
+        new = [t for t in new if self.match(t["name"], t["desc"])]
+        best = max(s["fish"], key=lambda f: E.fish_rate(s, f))
+        for title, group in (("Your toys", owned), ("Not bought yet", new)):
+            if not group:
+                continue
+            y += self.section(scr, view, y, title, len(group))
+            for t in group:
+                lv = E.toy_lv(s, t["id"])
+                c = E.toy_cost(s, t["id"])
+                maxed = lv >= TOY_MAX_LEVEL
+                pay = E.toy_play_value(s, best, t["id"]) if lv else 0
+                nxt = f"  (next: +{t['bonus']}%)" if 0 < lv < TOY_MAX_LEVEL else ""
+                lines = [(f"Lv {lv}/{TOY_MAX_LEVEL}  +{t['bonus'] * lv}% scales{nxt}", (170, 220, 250)),
+                         (f"Pays up to {E.fmt(pay)} scales every time a fish plays with it" if lv else
+                          f"{t['desc']} Fish that play with it shed scales!", (255, 214, 90) if lv else DIM)]
+                lab = "MAX" if maxed else (("Buy " if lv == 0 else "Up ") + E.fmt(c))
+                if t.get("season") and not lv:
+                    lines[0] = (f"{SEASONS[t['season']]['name']} special!  +{t['bonus']}% scales per level", (255, 170, 80))
+                self.row(scr, view, y, sprites.toy_icon(t["id"], 2), t["name"], lines, lab,
+                         lambda i=t["id"]: g.buy_toy(i), (not maxed) and g.can_afford(c),
+                         tcol=(255, 170, 80) if t.get("season") else TEXT)
+                y += ROW_H
+        y += self.no_matches(scr, view, y, owned or new)
         return y - y0
+
+    def no_matches(self, scr, view, y, found):
+        if found or not self.search.strip():
+            return 0
+        self.text(scr, f'Nothing here matches "{self.search.strip()}".', self.f_small, DIM, (view.x + 12, y + 6))
+        return 30
 
     def upgrade_effect(self, uid):
         s = self.g.state
@@ -832,21 +927,32 @@ class UI:
         g, s = self.g, self.g.state
         y0 = y
         hidden = 0
+        shown = []
         for u in UPGRADES:
             if u.get("season") != season:
                 continue
             if not E.upgrade_visible(s, u["id"]):
                 hidden += 1
                 continue
-            l = E.ulv(s, u["id"])
-            maxed = l >= u["max"]
-            c = E.upgrade_cost(s, u["id"])
-            lab = "MAX" if maxed else E.fmt(c)
-            self.row(scr, view, y, sprites.upgrade_icon(u["id"], 4), f"{u['name']}  (Lv {l})",
-                     [(self.upgrade_effect(u["id"]), (170, 220, 250)), u["desc"]], lab,
-                     lambda i=u["id"]: g.buy_upgrade(i), (not maxed) and g.can_afford(c))
-            y += ROW_H
-        if hidden:
+            if self.match(u["name"], u["desc"]):
+                shown.append(u)
+        bought = [u for u in shown if E.ulv(s, u["id"])]
+        new = [u for u in shown if not E.ulv(s, u["id"])]
+        for title, group in (("Bought", bought), ("Not bought yet", new)):
+            if not group:
+                continue
+            y += self.section(scr, view, y, title, len(group))
+            for u in group:
+                l = E.ulv(s, u["id"])
+                maxed = l >= u["max"]
+                c = E.upgrade_cost(s, u["id"])
+                lab = "MAX" if maxed else E.fmt(c)
+                self.row(scr, view, y, sprites.upgrade_icon(u["id"], 4), f"{u['name']}  (Lv {l})",
+                         [(self.upgrade_effect(u["id"]), (170, 220, 250)), u["desc"]], lab,
+                         lambda i=u["id"]: g.buy_upgrade(i), (not maxed) and g.can_afford(c))
+                y += ROW_H
+        y += self.no_matches(scr, view, y, shown)
+        if hidden and not self.search.strip():
             self.text(scr, f"+{hidden} more upgrade{'s' if hidden > 1 else ''} unlock{'' if hidden > 1 else 's'} "
                       "as your tank gets richer...", self.f_small, DIM, (view.x + 12, y + 4))
             y += 26
@@ -901,6 +1007,8 @@ class UI:
         for th in THEMES:
             if th.get("season") != season or not E.theme_visible(s, th["id"]):
                 continue
+            if not self.match(th["name"], th["desc"]):
+                continue
             icon = pygame.Surface((56, 36))
             for yy in range(28):
                 k = yy / 27
@@ -930,6 +1038,8 @@ class UI:
                      lambda i=th["id"]: g.theme_action(i), ok, btn_col=col,
                      tcol=(255, 170, 80) if th.get("season") else TEXT)
             y += ROW_H
+        if not season and y - y0 <= 24:
+            y += self.no_matches(scr, view, y, False)
         return y - y0
 
     def tab_season(self, scr, view, y):
@@ -947,14 +1057,17 @@ class UI:
             y += 18
         y += 6
         items = E.season_items(s, season)
+        found = False
         for key, title, fn in (("fish", "Catfish", self.tab_fish), ("themes", "Tank theme", self.tab_themes),
                                ("toys", "Toys", self.tab_toys), ("upgrades", "Upgrades", self.tab_upgrades)):
-            if not items[key]:
+            if not [i for i in items[key] if self.match(i["name"], i.get("desc", ""), i.get("blurb", ""))]:
                 continue
+            found = True
             self.text(scr, title, self.f_norm, (255, 170, 80), (view.x + 8, y + 2))
             y += 26
             y += fn(scr, view, y, season=season)
             y += 6
+        y += self.no_matches(scr, view, y, found)
         return y - y0
 
     def tab_hatchery(self, scr, view, y):

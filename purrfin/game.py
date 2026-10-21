@@ -63,6 +63,7 @@ class Game:
         self.rub = "ready"            # Fin Scratches ability: ready | armed | active | cooldown
         self.rub_t = 0.0              # seconds left of rubbing / of cooldown
         self.renaming = None      # fish dict being renamed
+        self.searching = False    # typing in the Shop search box
         self.rename_text = ""
         self.prev_fg = None
         self.last_input = 0.0
@@ -241,6 +242,8 @@ class Game:
             self.level_up(f, n)
         for f in E.tick_growth(s, dt):
             self.grew_up(f)
+        if self.searching and self.ui.panel != "shop":      # shop closed: stop typing
+            self.stop_search()
         self.auto_feed(dt)
         self.tick_rub(dt)
         self.tick_updater()
@@ -540,6 +543,7 @@ class Game:
 
     def mouse_up(self, pos, button):
         self.ui.drag = None
+        self.ui.sb_drag = None
         if self.drag_spot:
             key, _, moved = self.drag_spot
             self.drag_spot = None
@@ -559,6 +563,11 @@ class Game:
         if self.ui.over_panel(pos) or self.to_low(pos):
             self.note_input()
         self.ui.set_mouse(pos)
+        if self.ui.sb_drag is not None:
+            if buttons[0]:
+                self.ui.drag_scroll_to(self.ui.ui_pos(pos))
+                return
+            self.ui.sb_drag = None
         if self.ui.drag:
             if buttons[0]:
                 self.ui.drag_to(pos)
@@ -824,7 +833,37 @@ class Game:
         self.rename_text = ""
         self.finish_rename(True)
 
+    # ---- Shop search box: typing needs the window to take the keyboard, like renaming a fish
+    def start_search(self):
+        if self.searching:
+            return
+        if self.renaming is not None:
+            self.finish_rename(False)
+        self.searching = True
+        self.prev_fg = winutil.foreground()
+        winutil.set_activatable(self.hwnd, True)
+        pygame.key.start_text_input()
+
+    def stop_search(self):
+        if not self.searching:
+            return
+        self.searching = False
+        pygame.key.stop_text_input()
+        winutil.set_activatable(self.hwnd, False)
+        if self.prev_fg and self.prev_fg != self.hwnd:
+            winutil.restore_foreground(self.prev_fg)
+        self.prev_fg = None
+
     def key_down(self, e):
+        if self.searching:
+            if e.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                self.stop_search()
+            elif e.key == pygame.K_ESCAPE:
+                self.ui.search = ""
+                self.stop_search()
+            elif e.key == pygame.K_BACKSPACE:
+                self.ui.search = self.ui.search[:-1]
+            return
         if self.renaming is None:
             if e.key == pygame.K_ESCAPE:
                 self.ui.panel = None
@@ -837,6 +876,12 @@ class Game:
             self.rename_text = self.rename_text[:-1]
 
     def text_input(self, txt):
+        if self.searching:
+            from .pixfont import _GLYPHS
+            for ch in txt:
+                if (ch in _GLYPHS or ch.upper() in _GLYPHS) and len(self.ui.search) < 24:
+                    self.ui.search += ch
+            return
         if self.renaming is None:
             return
         from .pixfont import _GLYPHS

@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.5.1)
+DESKTOP AQUARIUM  (version 1.5.2)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -66,6 +66,8 @@ GOOD TO KNOW
   - Computer lagging? Options > Performance > Battery saver makes the tank even lighter.
     The game also slows itself down while a full-screen video or game is in front of it.
   - Drag the dotted bar at the top of the Shop/Fishdex to move it.
+  - In the Shop, type in the Search box to find something by name. Drag the green bar on the
+    right to scroll. Toys and upgrades are split into the ones you have and the ones you don't.
   - The game saves by itself. Click the red x on the tank to save and close.
   - Found a bug or need help? Options > Bugs & Support opens GitHub in your browser.
   - Updates: when a new version is out, an "Update!" button appears. Click it and the game
