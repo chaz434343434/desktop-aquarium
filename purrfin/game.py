@@ -21,6 +21,9 @@ from .tank import Tank, TANK_H
 from .ui import UI
 
 KEY = (255, 0, 255)          # transparent colour key - never used in art
+AUTOSAVE_EVERY = 30          # seconds between saves while playing
+BACKUP_EVERY = 300           # every 5 minutes the save is also copied to a backup (3 kept)
+BACKUPS = 3
 WIN_H = 660
 STRIP_H = 30
 
@@ -43,6 +46,8 @@ class Game:
     def __init__(self, save_path=None, monitor=None, fresh=False):
         self.save_path = save_path or default_save_path()
         self.state = None
+        self.last_backup = 0.0         # 0 = make a backup on the first save
+        self.restored_from = None      # set if the save was damaged and a backup was loaded instead
         if not fresh:
             self.state = self.load()
         self.toasts = []
@@ -55,6 +60,10 @@ class Game:
             away, amt = E.apply_offline(self.state)
             if amt > 0:
                 self.welcome = (away, amt)
+        if self.restored_from:
+            i, ago = self.restored_from
+            self.toast(f"Your save was damaged, so your backup from {E.fmt_time(max(0, ago))} ago was loaded.",
+                       (255, 210, 150), 10)
         self.monitor_override = monitor
         self.sounds = Sounds(self.state["settings"])
         self.food_cd = {}
@@ -71,7 +80,7 @@ class Game:
         self.drag_toy = None
         self.drag_spot = None         # [key, start_x, moved] while holding the jar / nest
         self.mouse_low = None
-        self.save_timer = 30.0
+        self.save_timer = AUTOSAVE_EVERY
         self.rate_hist = []
         self.updater = Updater()
         self.update_told = False
@@ -91,12 +100,21 @@ class Game:
         self.ui = UI(self)
 
     # ------------------------------------------------------------ persistence
+    def backup_path(self, i):
+        root, ext = os.path.splitext(self.save_path)
+        return f"{root}.backup{i}{ext}"
+
     def load(self):
-        try:
-            with open(self.save_path, "r", encoding="utf-8") as fh:
-                s = json.load(fh)
-        except (OSError, ValueError):
-            return None
+        s = self.read_save(self.save_path)
+        if s is None:
+            # the save is missing or damaged: try the 5-minute backups, newest first
+            for i in range(1, BACKUPS + 1):
+                s = self.read_save(self.backup_path(i))
+                if s is not None:
+                    self.restored_from = (i, time.time() - s.get("last_time", time.time()))
+                    break
+            if s is None:
+                return None
         base = E.new_state()
         for k, v in base.items():
             s.setdefault(k, v)
@@ -114,13 +132,52 @@ class Game:
             E.add_fish(s, "sunflower", "Sunny")
         return s
 
+    @staticmethod
+    def read_save(path):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                s = json.load(fh)
+        except (OSError, ValueError):
+            return None
+        return s if isinstance(s, dict) and isinstance(s.get("fish"), list) else None
+
     def save(self):
+        """written to a temp file, flushed to the disk, then swapped in: a power cut halfway through
+        can't leave a half-written save. Every 5 minutes it's also copied to a backup."""
         self.state["last_time"] = time.time()
         os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
+        data = json.dumps(self.state)
         tmp = self.save_path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(self.state, fh)
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
         os.replace(tmp, self.save_path)
+        now = time.time()
+        if now - self.last_backup >= BACKUP_EVERY:
+            self.last_backup = now
+            try:
+                for i in range(BACKUPS - 1, 0, -1):          # backup1 -> backup2 -> backup3
+                    if os.path.exists(self.backup_path(i)):
+                        os.replace(self.backup_path(i), self.backup_path(i + 1))
+                with open(self.backup_path(1), "w", encoding="utf-8") as fh:
+                    fh.write(data)
+            except OSError:
+                pass
+
+    def session_ending(self, msg, wparam):
+        """Windows is shutting down / restarting / signing out, or going to sleep: save this instant"""
+        self.save_now("windows")
+        if msg == 0x0016 and wparam:          # WM_ENDSESSION, really ending: stop the game too
+            self.running = False
+
+    def save_now(self, why=""):
+        """save right away (closing, Windows shutting down, going to sleep...). Never raises."""
+        try:
+            self.save()
+            return True
+        except Exception:
+            return False
 
     # ------------------------------------------------------------ window
     def layout(self):
@@ -186,6 +243,7 @@ class Game:
             pygame.display.set_caption("Desktop Aquarium")
             self.hwnd = pygame.display.get_wm_info().get("window")
             winutil.style_overlay(self.hwnd, KEY, st["opacity"], st["topmost"])
+            winutil.on_session_end(self.hwnd, self.session_ending)
         winutil.move(self.hwnd, self.win_x, self.win_y, self.win_w, self.win_h, st["topmost"])
         winutil.set_alpha(self.hwnd, KEY, st["opacity"])
 
@@ -254,7 +312,7 @@ class Game:
         self.toasts = [t for t in self.toasts if t[2] > 0]
         self.save_timer -= dt
         if self.save_timer <= 0:
-            self.save_timer = 30.0
+            self.save_timer = AUTOSAVE_EVERY
             try:
                 self.save()
             except OSError:

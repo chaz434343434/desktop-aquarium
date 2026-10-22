@@ -1,7 +1,11 @@
 ﻿"""Entry point: python -m purrfin.main  (or run DesktopAquarium.pyw)"""
 import argparse
+import atexit
 import os
+import signal
 import sys
+import time
+import traceback
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -15,6 +19,7 @@ from .game import Game  # noqa: E402
 
 # frames per second:      using it, idle on the desktop
 FPS = {"normal": (30, 15), "saver": (20, 10)}
+
 HIDDEN_FPS = 6     # tank hidden with the _ button
 COVERED_FPS = 4    # another program is full screen in front (video, slides, a game)
 
@@ -128,6 +133,45 @@ def main(argv=None):
     g.apply_window(first=True)
     if prev_fg:
         winutil.restore_foreground(prev_fg)
+    # ---- save however the game ends: the x button, Alt+F4, Task Manager, Windows shutting down,
+    # the computer going to sleep, Ctrl+C, a crash... (only a hard kill or power cut can't be caught;
+    # the 30-second autosave covers those)
+    done = {"saved": False}
+
+    def final_save():
+        if not done["saved"]:
+            done["saved"] = g.save_now("closing")
+
+    atexit.register(final_save)
+
+    def on_signal(sig, frame):
+        g.running = False
+
+    for name in ("SIGTERM", "SIGINT", "SIGBREAK", "SIGHUP"):
+        if hasattr(signal, name):
+            try:
+                signal.signal(getattr(signal, name), on_signal)
+            except (ValueError, OSError):
+                pass
+    crash_after = float(os.environ.get("DA_CRASH_AFTER", "0"))      # tests only
+    try:
+        run_loop(g, args, crash_after)
+    except Exception:
+        try:
+            with open(os.path.join(os.path.dirname(g.save_path), "crash.log"), "a", encoding="utf-8") as fh:
+                fh.write(f"---- {time.ctime()}\n{traceback.format_exc()}\n")
+        except OSError:
+            pass
+        final_save()
+        if getattr(sys, "frozen", False):
+            sys.exit(1)        # the built game: saved + logged, close quietly instead of an error box
+        raise
+    finally:
+        final_save()
+        pygame.quit()
+
+
+def run_loop(g, args, crash_after=0.0):
     clock = pygame.time.Clock()
     pacer = Pacer()
     stress = [0.0, 0]
@@ -139,6 +183,8 @@ def main(argv=None):
     while g.running:
         dt = min(0.3, clock.tick(pacer.fps(g, dt)) / 1000)
         t += dt
+        if crash_after and t >= crash_after:
+            raise RuntimeError("test crash (DA_CRASH_AFTER)")
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
                 g.quit()
@@ -173,11 +219,6 @@ def main(argv=None):
         pygame.display.flip()
         if args.seconds and t >= args.seconds:
             g.running = False
-    try:
-        g.save()
-    except OSError:
-        pass
-    pygame.quit()
 
 
 if __name__ == "__main__":

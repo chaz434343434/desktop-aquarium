@@ -252,3 +252,32 @@ def fullscreen_app_in_front(own=None):
         return r.left <= m.left and r.top <= m.top and r.right >= m.right and r.bottom >= m.bottom
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------- shutdown / sleep
+_hooks = {}
+
+
+def on_session_end(hwnd, callback):
+    """Windows only: call callback(msg, wparam) the moment Windows says it's shutting down, restarting,
+    signing out (WM_QUERYENDSESSION / WM_ENDSESSION) or going to sleep (WM_POWERBROADCAST + PBT_APMSUSPEND).
+    pygame doesn't pass these on, so the window's message handler is wrapped. The callback runs before
+    Windows gets its answer, so the save is on disk before anything is shut down."""
+    if not IS_WIN or not hwnd or hwnd in _hooks:
+        return
+    WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
+    user32.CallWindowProcW.restype = ctypes.c_ssize_t
+    user32.CallWindowProcW.argtypes = [ctypes.c_void_p, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM]
+    old = user32.GetWindowLongPtrW(hwnd, -4)              # GWLP_WNDPROC
+
+    def proc(h, msg, wp, lp):
+        if msg in (0x0011, 0x0016) or (msg == 0x0218 and wp == 0x0004):
+            try:
+                callback(msg, wp)
+            except Exception:
+                pass
+        return user32.CallWindowProcW(old, h, msg, wp, lp)
+
+    cb = WNDPROC(proc)
+    user32.SetWindowLongPtrW(hwnd, -4, ctypes.cast(cb, ctypes.c_void_p).value)
+    _hooks[hwnd] = (cb, old)                             # keep the callback alive

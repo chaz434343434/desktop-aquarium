@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.6.1)
+DESKTOP AQUARIUM  (version 1.6.2)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -72,7 +72,9 @@ GOOD TO KNOW
   - Drag the dotted bar at the top of the Shop/Fishdex to move it.
   - In the Shop, type in the Search box to find something by name. Drag the green bar on the
     right to scroll. Toys and upgrades are split into the ones you have and the ones you don't.
-  - The game saves by itself. Click the red x on the tank to save and close.
+  - The game saves by itself every 30 seconds, and whenever it closes: the red x, Alt+F4,
+    Task Manager, Windows shutting down or restarting, or the computer going to sleep.
+    Every 5 minutes it also keeps a backup; if the save ever gets damaged, the backup is loaded.
   - Found a bug or need help? Options > Bugs & Support opens GitHub in your browser.
   - Updates: when a new version is out, an "Update!" button appears. Click it and the game
     updates itself and reopens. Your fish are kept.
