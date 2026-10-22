@@ -39,6 +39,19 @@ for run in range(2):
     print(f"resize stress {run + 1}: exit code {code}", flush=True)
     ok &= code == 0
 
+# only one copy per save: a second launch must close by itself while the first keeps running
+save = os.path.join(tempfile.mkdtemp(), "save.json")
+first = subprocess.Popen([exe, "--fresh", "--save", save, "--seconds", "14"], env=env)
+time.sleep(5)
+try:
+    second = subprocess.call([exe, "--save", save], env=env, timeout=20)
+except subprocess.TimeoutExpired:
+    second = "still running"
+alive = first.poll() is None
+print(f"second copy: exit {second} | first still running {alive}", flush=True)
+ok &= second == 0 and alive
+first.wait(timeout=60)
+
 # the game's own screenshots, for a closer look (not pass/fail)
 tmp = tempfile.mkdtemp(prefix="da_shots_")
 code = subprocess.call([exe, "--fresh", "--demo", "--save", os.path.join(tmp, "s.json"), "--seconds", "13",

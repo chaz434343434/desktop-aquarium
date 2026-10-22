@@ -107,6 +107,12 @@ def main(argv=None):
     ap.add_argument("--demo", action="store_true", help="give a pile of scales and fish (testing)")
     args = ap.parse_args(argv)
 
+    # one copy at a time: opening it again (double-clicking the shortcut five times...) just brings
+    # the running game back on screen instead of starting another one on the same save
+    from .game import default_save_path
+    if not winutil.single_instance(args.save or default_save_path()):
+        winutil.wake_running_copy()
+        return
     prev_fg = winutil.foreground()
     winutil.set_dpi_aware()
     winutil.set_low_priority()

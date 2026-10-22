@@ -270,8 +270,10 @@ def on_session_end(hwnd, callback):
     user32.CallWindowProcW.argtypes = [ctypes.c_void_p, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM]
     old = user32.GetWindowLongPtrW(hwnd, -4)              # GWLP_WNDPROC
 
+    show = show_message_id()
+
     def proc(h, msg, wp, lp):
-        if msg in (0x0011, 0x0016) or (msg == 0x0218 and wp == 0x0004):
+        if msg in (0x0011, 0x0016) or (msg == 0x0218 and wp == 0x0004) or (show and msg == show):
             try:
                 callback(msg, wp)
             except Exception:
@@ -281,3 +283,66 @@ def on_session_end(hwnd, callback):
     cb = WNDPROC(proc)
     user32.SetWindowLongPtrW(hwnd, -4, ctypes.cast(cb, ctypes.c_void_p).value)
     _hooks[hwnd] = (cb, old)                             # keep the callback alive
+
+
+# ---------------------------------------------------------------- one copy at a time
+_lock = None
+
+
+def single_instance(save_path):
+    """True if this is the only copy of the game running on this save file.
+    (Per save file, so two copies can't overwrite each other's progress; tests use their own saves.)
+    Windows: a named mutex. Mac: a lock file next to the save. Released automatically when the game ends."""
+    global _lock
+    import hashlib
+    key = hashlib.sha1(os.path.abspath(save_path).lower().encode("utf-8")).hexdigest()[:16]
+    if IS_WIN:
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)     # so the "already exists" code isn't lost
+        k32.CreateMutexW.restype = wt.HANDLE
+        k32.CreateMutexW.argtypes = [ctypes.c_void_p, wt.BOOL, wt.LPCWSTR]
+        h = k32.CreateMutexW(None, False, f"Local\\DesktopAquarium_{key}")
+        if not h:
+            return True                         # can't tell: let it run
+        if ctypes.get_last_error() == 183:      # ERROR_ALREADY_EXISTS
+            k32.CloseHandle(h)
+            return False
+        _lock = h                               # keep it open while the game runs
+        return True
+    try:
+        import fcntl
+        folder = os.path.dirname(os.path.abspath(save_path))
+        os.makedirs(folder, exist_ok=True)
+        fh = open(os.path.join(folder, f".running_{key}.lock"), "w")
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            fh.close()
+            return False
+        _lock = fh
+        return True
+    except Exception:
+        return True
+
+
+SHOW_MESSAGE = "DesktopAquarium_ShowYourself"
+
+
+def show_message_id():
+    return user32.RegisterWindowMessageW(SHOW_MESSAGE) if IS_WIN else 0
+
+
+def wake_running_copy():
+    """the game is already open: ask it to come back on screen (un-hide, say hello)"""
+    if not IS_WIN:
+        return
+    msg = show_message_id()
+    proc = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+
+    def cb(hwnd, lp):
+        buf = ctypes.create_unicode_buffer(64)
+        user32.GetWindowTextW(hwnd, buf, 64)
+        if buf.value == "Desktop Aquarium":
+            user32.PostMessageW(hwnd, msg, 0, 0)
+        return True
+
+    user32.EnumWindows(proc(cb), 0)

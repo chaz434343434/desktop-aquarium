@@ -40,7 +40,7 @@ jobs:
           SDL_AUDIODRIVER: dummy
         run: |
           for t in test_*.py; do
-            case "$t" in test_update_e2e.py|test_update_mac_e2e.py|test_close_saves.py) continue;; esac
+            case "$t" in test_update_e2e.py|test_update_mac_e2e.py|test_close_saves.py|test_single_instance.py) continue;; esac
             echo "== $t"; python "$t" || { echo "FAILED: $t"; exit 1; }
           done
 

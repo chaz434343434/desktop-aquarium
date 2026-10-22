@@ -165,8 +165,30 @@ class Game:
             except OSError:
                 pass
 
+    def test_hooks(self, dt):
+        """only for the real-window tests (DA_STATUS_FILE set): hide on request, report state"""
+        path = os.environ.get("DA_STATUS_FILE")
+        if not path:
+            return
+        self._hook_t = getattr(self, "_hook_t", 0.0) - dt
+        if self._hook_t > 0:
+            return
+        self._hook_t = 0.3
+        hide = os.path.join(os.path.dirname(path), "hide.txt")
+        if os.path.exists(hide):
+            os.remove(hide)
+            self.ui.minimize()
+        with open(path, "w") as fh:
+            fh.write(f"minimized={self.minimized} {'woken' if getattr(self, 'woken', False) else ''}")
+
     def session_ending(self, msg, wparam):
-        """Windows is shutting down / restarting / signing out, or going to sleep: save this instant"""
+        """Windows is shutting down / restarting / signing out, or going to sleep: save this instant.
+        Also: someone tried to open the game again -> come back on screen."""
+        if msg == winutil.show_message_id():
+            self.minimized = False
+            self.woken = True
+            self.toast("Desktop Aquarium is already running - here it is!", (200, 220, 255), 4)
+            return
         self.save_now("windows")
         if msg == 0x0016 and wparam:          # WM_ENDSESSION, really ending: stop the game too
             self.running = False
@@ -300,6 +322,7 @@ class Game:
             self.level_up(f, n)
         for f in E.tick_growth(s, dt):
             self.grew_up(f)
+        self.test_hooks(dt)
         if self.searching and self.ui.panel != "shop":      # shop closed: stop typing
             self.stop_search()
         self.auto_feed(dt)

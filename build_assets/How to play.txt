@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.6.2)
+DESKTOP AQUARIUM  (version 1.6.3)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -62,6 +62,7 @@ THE LONG GAME
 
 GOOD TO KNOW
   - It never steals your keyboard or mouse from other programs, so it can sit there all day.
+  - Only one copy runs at a time. Opening it again just brings the tank back on screen.
   - Clicks on the empty space around the tank go straight through to whatever is behind it.
     (On a Mac the tank sits in its own small window instead, which grows while the shop is open.)
   - "Chill" pauses hunger and happiness if you just want to watch.
