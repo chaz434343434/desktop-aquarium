@@ -96,6 +96,7 @@ g.toggle_autonest()
 while len(s["fish"]) < E.capacity(s):
     E.add_fish(s, "sunflower", shiny=False)
 g.tank.sync()
+s["pending"] = []          # earlier random Small Egg hatches can leave a baby waiting too
 s["eggs"] = [dict(c="golden", left=0, total=1, inc=1)]
 g.hatch_ready()
 check("baby waiting (tank full)", len(s["pending"]) == 1)
