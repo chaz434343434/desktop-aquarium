@@ -5,7 +5,7 @@ from . import economy as E
 from . import sprites
 from .pixfont import PixelFont
 from .version import VERSION
-from .data import SEASONAL_SPECIES, SEASONS, RUB_COOLDOWN
+from .data import SEASONAL_SPECIES, SEASONS, RUB_COOLDOWN, LIGHTS, FOODS_BY_ID
 from .data import (SPECIES, SPECIES_BY_ID, FOODS, TOYS, UPGRADES, TOY_MAX_LEVEL, TANK_NAMES, CLUTCHES, THEMES,
                    CLUTCHES_BY_ID,
                    TANK_CAPACITY, SPAWN_MIN, PEARL_BONUS, PEARL_TREE, PEARL_TREE_BY_ID)
@@ -36,6 +36,11 @@ PX = 2                        # size of one UI "pixel"
 def s_pending(g):
     s = g.state
     return bool(s.get("pending")) and len(s["fish"]) >= E.capacity(s)
+
+
+def g_state(g):
+    """the tank on screen: yours, or the friend's tank you're visiting"""
+    return g.visiting if g.visiting else g.state
 
 
 def _lighten(c, k=0.15):
@@ -242,6 +247,12 @@ class UI:
             scr.blit(sprites.scale_icon(3), (b.x + 10, b.y + 6))
             self.text(scr, lab, self.f_norm, TEXT, (b.x + 36, b.centery + 1), "midleft")
             return
+        self.draw_plaque(scr)
+        if g.visiting:
+            self.draw_visiting(scr)
+            self.draw_floaters(scr)
+            self.draw_tips(scr)
+            return
         self.draw_strip(scr)
         if s_pending(g):              # a hatchling has no room: this choice can't be skipped
             self.panel = "baby"
@@ -260,10 +271,86 @@ class UI:
             self.draw_welcome(scr)
         self.draw_floaters(scr)
         self.draw_fish_tip(scr)
+        self.draw_food_drag(scr)
         self.draw_tips(scr)
+
+    def draw_plaque(self, scr):
+        """the tank's name on a little brass plaque on the front of the stand"""
+        name = g_state(self.g).get("tank_name")
+        if not name:
+            return
+        img = self.f_small.render(name, True, (60, 40, 12))
+        r = self.tank
+        rr = pygame.Rect(0, 0, img.get_width() + 18, img.get_height() + 8)
+        rr.midbottom = (r.centerx, r.bottom - 1)
+        pygame.draw.rect(scr, (110, 80, 30), rr)
+        pygame.draw.rect(scr, (214, 172, 80), rr.inflate(-2, -2))
+        pygame.draw.line(scr, (245, 215, 140), (rr.x + 2, rr.y + 2), (rr.right - 3, rr.y + 2))
+        for sx in (rr.x + 4, rr.right - 5):
+            scr.fill((120, 90, 40), (sx, rr.centery - 1, 2, 2))
+        scr.blit(img, img.get_rect(center=(rr.centerx, rr.centery + 1)))
+
+    def draw_visiting(self, scr):
+        g = self.g
+        vs = g.visiting
+        r = self.tank
+        name = vs.get("tank_name") or "a friend's tank"
+        h = 34
+        rr = pygame.Rect(r.x + 4, r.y - h - 6, r.w - 8, h)
+        room = rr.w - 210
+        for lab in (f"Visiting {name}  -  {len(vs['fish'])} fish   (just looking: nothing here changes your game)",
+                    f"Visiting {name}  -  {len(vs['fish'])} fish  (just looking)",
+                    f"Visiting {name}", name):
+            if self.f_small.size(lab)[0] <= room:
+                break
+        self.box(scr, rr, BG)
+        self.text(scr, lab, self.f_small, TEXT, (rr.x + 12, rr.centery + 1), "midleft")
+        self.button(scr, (rr.right - 190, rr.y + 3, 184, 28), "Back to my tank", g.leave_visit, col=GOOD)
+
+    def draw_food_drag(self, scr):
+        g = self.g
+        if not g.food_drag or not g.food_drag[1] or self.mouse is None:
+            return
+        fd = FOODS_BY_ID[g.food_drag[0]]
+        ic = sprites.food_icon(fd["color"], 3)
+        scr.blit(ic, ic.get_rect(center=self.mouse))
 
     def restore(self):
         self.g.minimized = False
+
+    # ------------------------------------------------------------ My Tank: name, lights, photo, share
+    def tank_tools(self, scr, view, y):
+        g, s = self.g, self.g.state
+        y0 = y
+        x = view.x + 8
+        name = s.get("tank_name") or "(no name yet)"
+        self.text(scr, f"Tank name: {name}", self.f_norm, ACC if s.get("tank_name") else DIM, (x, y + 8))
+        bx = view.right - 16
+        for lab, cb, col, tip in (("Visit a tank", g.visit_from_clipboard, NAV,
+                                   ["Visit a friend's tank", "Copy their tank code first,", "then press this"]),
+                                  ("Copy tank code", g.copy_tank_code, NAV,
+                                   ["Copy your tank code", "Send it to a friend so they", "can look at your tank"]),
+                                  ("Take photo", g.take_photo, GOOD, ["Take a photo", "Saved in Pictures >", "Desktop Aquarium"]),
+                                  ("Name", g.start_tank_name, NAV, ["Name your tank", "Shown on a plaque on the front"])):
+            w = self.f_small.size(lab)[0] + 20
+            bx -= w
+            self.button(scr, (bx, y + 2, w, 28), lab, cb, col=col, font=self.f_small, tip=tip)
+            bx -= 6
+        y += 36
+        self.text(scr, "Lights:", self.f_small, DIM, (x, y + 8))
+        lx = x + 70
+        cur = s["settings"].get("light", "auto")
+        for lid, lab, col, _ in LIGHTS:
+            w = self.f_small.size(lab)[0] + 16
+            c = col if col else ((255, 214, 90) if lid == "day" else NAV)
+            bcol = _lighten(c, 0.1) if cur == lid else _darken(c, 0.45)
+            self.button(scr, (lx, y + 2, w, 26), lab, lambda i=lid: g.change_setting("light", i), col=bcol,
+                        font=self.f_small)
+            if cur == lid:
+                pygame.draw.rect(scr, ACC, (lx - 2, y, w + 4, 30), 2)
+            lx += w + 6
+        y += 38
+        return y - y0
 
     def minimize(self):
         self.g.minimized = True
@@ -323,9 +410,10 @@ class UI:
                 sh = pygame.Surface((b.w - 4, int((b.h - 4) * k)), pygame.SRCALPHA)
                 sh.fill((0, 0, 0, 120))
                 scr.blit(sh, (b.x + 2, b.y + 2))
-            self.hits.append((b, lambda i=fd["id"]: g.use_food(i)))
+            self.hits.append((b, lambda i=fd["id"]: g.food_press(i)))
             self.tips.append((b, [fd["name"], "Free!" if c == 0 else f"Cost: {E.fmt(c)} scales", fd["desc"],
-                                  f"+{fd['full']} full  +{fd['happy']} happy  +{fd['xp']} xp"]))
+                                  f"+{fd['full']} full  +{fd['happy']} happy  +{fd['xp']} xp",
+                                  "Click to feed, or drag it into the tank"]))
             x += STRIP_H + 4
         if nxt:
             b = pygame.Rect(x, y1, STRIP_H, STRIP_H)
@@ -384,7 +472,8 @@ class UI:
             bx -= 4
         # ---- buff timers: left of the buttons if there's room, else right of the foods, else a row above.
         # (With Scratch!, Collect and Hatchery showing there often isn't room left of the buttons.)
-        names = {"double": ("2x", ACC), "frenzy": ("Frenzy", (255, 160, 120)), "bliss": ("Bliss", (140, 220, 140))}
+        names = {"double": ("2x", ACC), "frenzy": ("Frenzy", (255, 160, 120)), "bliss": ("Bliss", (140, 220, 140)),
+                 "storm": ("Storm", (170, 230, 255)), "golden": ("Golden", (255, 220, 110))}
         fx = row1_end + 4                       # next free spot right of the foods
         ax = r.right - 4                        # next free spot on the row above (right to left)
         for b, t in s["buffs"].items():
@@ -512,7 +601,8 @@ class UI:
         rr = pygame.Rect(r.centerx - w // 2, self.hud_top() - 8 - h, w, h)
         rr.clamp_ip(scr.get_rect())
         self.box(scr, rr, BG)
-        self.text(scr, f"Name your {SPECIES_BY_ID[f['sp']]['name']}", self.f_norm, ACC, (rr.centerx, rr.y + 12), "midtop")
+        title = "Name your tank" if f.get("_tank") else f"Name your {SPECIES_BY_ID[f['sp']]['name']}"
+        self.text(scr, title, self.f_norm, ACC, (rr.centerx, rr.y + 12), "midtop")
         box = pygame.Rect(rr.x + 30, rr.y + 42, rr.w - 60, 36)
         self.box(scr, box, (18, 22, 36), bevel=False)
         caret = "_" if int(g.now * 2) % 2 else " "
@@ -979,6 +1069,7 @@ class UI:
     def tab_mine(self, scr, view, y):
         g, s = self.g, self.g.state
         y0 = y
+        y += self.tank_tools(scr, view, y)
         gm = E.fish_mult(s)
         for f in sorted(s["fish"], key=lambda f: -E.fish_rate(s, f)):
             sp = SPECIES_BY_ID[f["sp"]]
@@ -1399,6 +1490,13 @@ class UI:
         sb(X + 182, 34, "-", lambda: g.change_setting("volume", max(0.0, round(st["volume"] - 0.1, 1))))
         self.text(scr, f"{int(st['volume'] * 100)}%", self.f_norm, ACC, (X + 250, y + 14), "center")
         sb(X + 282, 34, "+", lambda: g.change_setting("volume", min(1.0, round(st["volume"] + 0.1, 1))))
+        y += 36
+        label("Calm sounds")
+        amb = st.get("ambience", "off")
+        sb(X, 80, "Off", lambda: g.change_setting("ambience", "off"), amb == "off")
+        sb(X + 86, 80, "Water", lambda: g.change_setting("ambience", "water"), amb == "water")
+        sb(X + 172, 150, "Water + music", lambda: g.change_setting("ambience", "music"), amb == "music")
+        self.text(scr, "(soft background sounds)", self.f_small, DIM, (X + 332, y + 6))
         y += 36
         label("Updates")
         sb(X, 80, "On", lambda: g.change_setting("autoupdate", True), st.get("autoupdate", True))

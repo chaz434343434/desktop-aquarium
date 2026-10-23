@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.6.4)
+DESKTOP AQUARIUM  (version 1.7.0)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -11,7 +11,10 @@ THE BASICS
   - Pop the floating bubbles - click each one. Golden ones are worth 10x.
   - Bubble upgrades (Bubble Magnet, Scale Polish, Bubble Machine, Lucky Moss) also power up
     your fish: the more your bubbles are worth, the more scales your fish shed.
-  - Feed your fish with the food buttons next to your scales.
+  - Feed your fish with the food buttons next to your scales. Click to feed, or drag a food
+    into the tank to drop it exactly where you want.
+  - Sometimes when your mouse is in the tank, a fish swims over with a little heart: it wants
+    to be petted! Pet it then and it pays 3x.
   - Open the Shop to buy new catfish, toys, upgrades and tank themes.
   - Fish play with toys and shed scales when they do.
   - Hover over a fish to see how it's doing.
@@ -20,6 +23,18 @@ THE BASICS
     (up to 15), then it recharges for a minute.
   - Right-click a fish to give it a name. To take a name off, right-click it again and
     press "Remove name" (or save an empty name).
+
+MAKE IT YOURS (Shop > My Tank)
+  - Name your tank: the name goes on a little plaque on the front.
+  - Lights: keep the real day & night clock, or pick Moonlight, Sunset, Glow, Purple, Deep sea.
+  - Take photo: saves a picture in your Pictures folder (Desktop Aquarium).
+  - Copy tank code: send it to a friend. They copy it and press Visit a tank to look at
+    your tank (just looking - it doesn't change anything in their game).
+  - Options > Calm sounds: soft water, or water + gentle music.
+
+SURPRISES
+  - Every so often: a bubble storm, a golden moment (every bubble golden!) or a treasure
+    diver with a big gift. At night, by the clock, your fish get sleepy.
 
 WHEN YOU COME BACK
   - Build the Scale Jar (Shop > Upgrades). It fills up while you're away. Click it to collect.

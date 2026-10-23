@@ -807,6 +807,33 @@ VISITORS = [
     dict(id="axolotl", name="Axolotl", secs=600, where="mid", speed=4, weight=1),
 ]
 VISITORS_BY_ID = {v["id"]: v for v in VISITORS}
+# surprise-event guest (not in the normal visitor rotation): a bigger gift, often a Mystery Egg
+DIVER = dict(id="diver", name="Treasure Diver", secs=900, where="mid", speed=6, weight=0, treasure=0.5)
+VISITORS_BY_ID["diver"] = DIVER
+
+# ---------------------------------------------------------------- surprise events
+EVENT_FIRST = (300, 600)       # seconds until the first surprise
+EVENT_EVERY = (480, 960)       # then one every 8-16 minutes
+EVENTS = [  # (id, weight)
+    ("storm", 3),              # bubble storm: bubbles come 5x as fast for 20 s
+    ("golden", 2),             # golden moment: every bubble is golden for 12 s
+    ("diver", 2),              # a treasure diver swims through
+]
+CURIOUS_EVERY = (10, 20)       # seconds between "pet me!" visits while your mouse is in the tank
+CURIOUS_TIME = 9               # how long the fish waits for you
+CURIOUS_BONUS = 3              # petting it then pays this many times as much
+
+# ---------------------------------------------------------------- tank lights
+LIGHTS = [  # (id, button name, tint colour, strength) - None = no tint
+    ("auto", "Clock", None, None),         # day & night by the real clock
+    ("day", "Daylight", None, None),
+    ("moon", "Moonlight", (70, 100, 210), 75),
+    ("sunset", "Sunset", (255, 130, 110), 55),
+    ("glow", "Glow", (90, 255, 160), 45),
+    ("purple", "Purple", (170, 90, 235), 60),
+    ("ocean", "Deep sea", (30, 120, 190), 70),
+]
+LIGHTS_BY_ID = {x[0]: x for x in LIGHTS}
 VISIT_EVERY = (240, 480)
 HAUNTED_POP_MULT = 2         # pop-bubbles are skulls worth this much in the Haunted Lagoon
 

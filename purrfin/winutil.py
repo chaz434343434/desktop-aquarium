@@ -346,3 +346,103 @@ def wake_running_copy():
         return True
 
     user32.EnumWindows(proc(cb), 0)
+
+
+# ---------------------------------------------------------------- clipboard / Pictures folder
+def set_clipboard(text):
+    """copy text to the clipboard. Returns True if it worked."""
+    try:
+        if IS_WIN:
+            k32 = ctypes.windll.kernel32
+            k32.GlobalAlloc.restype = ctypes.c_void_p
+            k32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+            k32.GlobalLock.restype = ctypes.c_void_p
+            k32.GlobalLock.argtypes = [ctypes.c_void_p]
+            k32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+            user32.SetClipboardData.restype = ctypes.c_void_p
+            user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+            data = text.encode("utf-16-le") + b"\0\0"
+            for _ in range(10):
+                if user32.OpenClipboard(None):
+                    break
+                import time
+                time.sleep(0.05)
+            else:
+                return False
+            try:
+                user32.EmptyClipboard()
+                h = k32.GlobalAlloc(0x0002, len(data))          # GMEM_MOVEABLE
+                p = k32.GlobalLock(h)
+                ctypes.memmove(p, data, len(data))
+                k32.GlobalUnlock(h)
+                return bool(user32.SetClipboardData(13, h))     # CF_UNICODETEXT
+            finally:
+                user32.CloseClipboard()
+        import subprocess
+        subprocess.run(["pbcopy"] if IS_MAC else ["xclip", "-selection", "clipboard"], input=text.encode("utf-8"),
+                       check=True, timeout=5)
+        return True
+    except Exception:
+        return False
+
+
+def get_clipboard():
+    """text on the clipboard ('' if none)"""
+    try:
+        if IS_WIN:
+            k32 = ctypes.windll.kernel32
+            k32.GlobalLock.restype = ctypes.c_void_p
+            k32.GlobalLock.argtypes = [ctypes.c_void_p]
+            k32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+            user32.GetClipboardData.restype = ctypes.c_void_p
+            user32.GetClipboardData.argtypes = [ctypes.c_uint]
+            if not user32.OpenClipboard(None):
+                return ""
+            try:
+                h = user32.GetClipboardData(13)
+                if not h:
+                    return ""
+                p = k32.GlobalLock(h)
+                try:
+                    return ctypes.wstring_at(p) if p else ""
+                finally:
+                    k32.GlobalUnlock(h)
+            finally:
+                user32.CloseClipboard()
+        import subprocess
+        out = subprocess.run(["pbpaste"] if IS_MAC else ["xclip", "-selection", "clipboard", "-o"],
+                             capture_output=True, timeout=5)
+        return out.stdout.decode("utf-8", "replace")
+    except Exception:
+        return ""
+
+
+def pictures_dir():
+    """the user's Pictures folder (Windows may move it, e.g. into OneDrive)"""
+    if IS_WIN:
+        try:
+            class GUID(ctypes.Structure):
+                _fields_ = [("a", ctypes.c_uint32), ("b", ctypes.c_uint16), ("c", ctypes.c_uint16),
+                            ("d", ctypes.c_ubyte * 8)]
+            fid = GUID(0x33E28130, 0x4E1E, 0x4676, (ctypes.c_ubyte * 8)(0x83, 0x5A, 0x98, 0x39, 0x5C, 0x3B, 0xC3, 0xBB))
+            p = ctypes.c_wchar_p()
+            if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(fid), 0, None, ctypes.byref(p)) == 0:
+                path = p.value
+                ctypes.windll.ole32.CoTaskMemFree(p)
+                if path and os.path.isdir(path):
+                    return path
+        except Exception:
+            pass
+    path = os.path.expanduser("~/Pictures")
+    return path if os.path.isdir(path) else os.path.expanduser("~")
+
+
+def open_folder(path):
+    try:
+        if IS_WIN:
+            os.startfile(path)
+        else:
+            import subprocess
+            subprocess.Popen(["open" if IS_MAC else "xdg-open", path])
+    except Exception:
+        pass

@@ -31,6 +31,7 @@ def record(where, exc):
 
 
 save = os.path.join(tempfile.mkdtemp(), "save.json")
+PHOTO_DIR = tempfile.mkdtemp()
 g = Game(save_path=save, fresh=True)
 g.apply_window(first=True)
 TABS = ["fish", "toys", "upgrades", "hatchery", "themes", "mine", "spawn", "season:halloween"]
@@ -115,6 +116,33 @@ def action():
         g.ui.minimize() if rng.random() < 0.5 else g.ui.restore()
     elif a < 0.77:
         g.toggle_chill()
+    elif a < 0.79:
+        g.start_event(rng.choice(["storm", "golden", "diver"]))
+    elif a < 0.80:
+        from purrfin import share
+        if g.visiting:
+            g.leave_visit()
+        else:
+            g.visit(share.encode(g.state) if rng.random() < 0.8 else "DA1:junk" + str(rng.random()))
+    elif a < 0.805:
+        import purrfin.winutil as W
+        W.pictures_dir = lambda: PHOTO_DIR
+        g.take_photo()
+    elif a < 0.82:
+        g.food_press(rng.choice(["flakes", "pellets"]))
+        p = rand_pos()
+        g.mouse_motion(p, (5, 5), (1, 0, 0))
+        g.mouse_up(p, 1)
+    elif a < 0.83:
+        g.change_setting("light", rng.choice(["auto", "day", "moon", "sunset", "glow", "purple", "ocean"]))
+    elif a < 0.835:
+        g.start_tank_name()
+        g.text_input(rng.choice(["Reef", "", "My Tank!!"]))
+        g.key_down(pygame.event.Event(pygame.KEYDOWN, key=rng.choice([pygame.K_RETURN, pygame.K_ESCAPE])))
+    elif a < 0.84:
+        g.mouse_low = (rng.uniform(5, g.tank.w - 5), rng.uniform(5, 50))
+        g.tank.beg_timer = 0
+        g.tank.hour_override = rng.choice([None, 2, 12, 23])
     else:
         pass
 

@@ -12,9 +12,11 @@ from . import winutil
 from .data import (SPECIES, SPECIES_BY_ID, FOODS, FOODS_BY_ID, TOYS_BY_ID, UPGRADES_BY_ID, CLUTCHES_BY_ID,
                    MYSTERY_FROM_GOLDEN, MYSTERY_FROM_VISITOR,
                    THEMES_BY_ID, SEASONAL_BY_ID, SEASONS, SKULL_POP_MULT, HAUNTED_POP_MULT,
-                   RUB_COOLDOWN, RUB_EVERY,
+                   RUB_COOLDOWN, RUB_EVERY, DIVER, EVENTS, EVENT_FIRST, EVENT_EVERY, CURIOUS_BONUS,
                    TOY_MAX_LEVEL, TANK_NAMES, FISH_NAMES)
-from .sound import Sounds
+from .sound import Sounds, Ambience
+from . import share
+from .pngsave import save_png
 from .updater import Updater
 from .version import VERSION
 from .tank import Tank, TANK_H
@@ -66,6 +68,8 @@ class Game:
                        (255, 210, 150), 10)
         self.monitor_override = monitor
         self.sounds = Sounds(self.state["settings"])
+        self.ambience = Ambience(self.sounds)
+        self.photo_dir_opened = False
         self.food_cd = {}
         self.last_pet = {}
         self.last_any_pet = -9.0
@@ -73,6 +77,10 @@ class Game:
         self.rub_t = 0.0              # seconds left of rubbing / of cooldown
         self.renaming = None      # fish dict being renamed
         self.searching = False    # typing in the Shop search box
+        self.event_t = random.uniform(*EVENT_FIRST)
+        self.food_drag = None     # [food id, screen pos] while dragging a food from its button
+        self.visiting = None      # a friend's tank (state dict) while visiting it
+        self.my_tank = None
         self.rename_text = ""
         self.prev_fg = None
         self.last_input = 0.0
@@ -164,6 +172,31 @@ class Game:
                     fh.write(data)
             except OSError:
                 pass
+
+    def tick_events(self, dt):
+        """now and then a surprise: a bubble storm, a golden moment, or a treasure diver"""
+        s = self.state
+        if s["chill"] or self.visiting or self.minimized:
+            return
+        self.event_t -= dt
+        if self.event_t > 0:
+            return
+        self.event_t = random.uniform(*EVENT_EVERY)
+        self.start_event(random.choices([e for e, _ in EVENTS], weights=[w for _, w in EVENTS])[0])
+
+    def start_event(self, kind):
+        s = self.state
+        if kind == "storm":
+            s["buffs"]["storm"] = 20.0
+            self.toast("A bubble storm! Pop as many bubbles as you can!", (170, 230, 255), 6)
+            for _ in range(4):
+                self.tank.spawn_pop()
+        elif kind == "golden":
+            s["buffs"]["golden"] = 12.0
+            self.toast("Golden moment! Every bubble is golden for a few seconds!", (255, 220, 110), 6)
+        elif kind == "diver" and self.tank.visitor is None:
+            self.tank.spawn_visitor(DIVER)
+        self.sounds.play("golden", 0, self.now)
 
     def test_hooks(self, dt):
         """only for the real-window tests (DA_STATUS_FILE set): hide on request, report state"""
@@ -280,7 +313,8 @@ class Game:
         if self.screen is None:
             return
         ui = self.ui
-        tall = bool(ui.panel or self.renaming or ui.update_prompt or self.welcome or self.state.get("pending"))
+        tall = bool(ui.panel or self.renaming or ui.update_prompt or self.welcome or self.state.get("pending")) \
+            and not self.visiting
         if tall != self.compact_tall or self.minimized != getattr(self, "_was_min", False):
             self.compact_tall = tall
             self._was_min = self.minimized
@@ -323,6 +357,8 @@ class Game:
         for f in E.tick_growth(s, dt):
             self.grew_up(f)
         self.test_hooks(dt)
+        self.tick_events(dt)
+        self.ambience.tick()
         if self.searching and self.ui.panel != "shop":      # shop closed: stop typing
             self.stop_search()
         self.auto_feed(dt)
@@ -350,6 +386,8 @@ class Game:
 
     def show_shedding(self, dt):
         """income is credited every frame; every few seconds each fish shows what it made"""
+        if self.visiting:
+            return
         g = E.fish_mult(self.state)
         for a in self.tank.fish.values():
             a.shed += E.fish_rate(self.state, a.f) * g * dt
@@ -362,6 +400,8 @@ class Game:
                 a.shed = 0.0
 
     def auto_pop(self, p):
+        if self.visiting:
+            return
         """bubbles left at the surface collect themselves at 30% value"""
         val = E.pop_value(self.state) * (10 if p.golden else 1) * self.pop_mult(p) * 0.3
         E.earn(self.state, val)
@@ -436,6 +476,8 @@ class Game:
             self.toast(msg, (255, 200, 150), 6)
 
     def auto_feed(self, dt):
+        if self.visiting:
+            return
         lv = E.ulv(self.state, "feeder")
         if not lv:
             return
@@ -477,6 +519,8 @@ class Game:
         self.sounds.play("plop", 0.15, self.now)
 
     def fish_played(self, actor, dt):
+        if self.visiting:
+            return
         f = actor.f
         f["happy"] = min(100.0, f["happy"] + 1.5 * dt)
         n = E.gain_xp(self.state, f, 0.08 * dt * (1 + f["lv"] * 0.05))
@@ -497,6 +541,7 @@ class Game:
 
     # ---- Fin Scratches (id 'rub'): press the button, then the first scratch on a fish starts the timer
     def rub_button(self):
+        self.come_home()
         if self.rub == "ready":
             self.rub = "armed"
             self.toast(f"Hold the mouse on a fish and wiggle to scratch! You get {E.rub_secs(self.state)} seconds.",
@@ -533,6 +578,14 @@ class Game:
         f = actor.f
         hm = E.hands_mult(s)
         reward = E.pet_reward(s, f)
+        if actor.beg > 0:                      # it swam over to ask for this
+            reward *= CURIOUS_BONUS
+            actor.beg = 0.0
+            actor.state, actor.timer = "wander", 0.5
+            self.tank.float_text(actor.x, actor.y - 12, "Loved it!", (255, 160, 200))
+            for _ in range(3):
+                self.tank.heart(actor.x, actor.y - 2)
+            s["stats"]["loved"] = s["stats"].get("loved", 0) + 1
         E.earn(s, reward)
         f["happy"] = min(100.0, f["happy"] + 6 * (1 + 0.1 * E.ulv(s, "hands")))
         n = E.gain_xp(s, f, 1.5 * hm)
@@ -585,6 +638,8 @@ class Game:
         self.note_input()
         if self.ui.click(pos, button):
             return
+        if self.visiting:                      # a friend's tank: just looking
+            return
         low = self.to_low(pos)
         if low is None or self.minimized:
             return
@@ -625,6 +680,14 @@ class Game:
     def mouse_up(self, pos, button):
         self.ui.drag = None
         self.ui.sb_drag = None
+        if self.food_drag:
+            fid, moved = self.food_drag
+            self.food_drag = None
+            low = self.to_low(pos)
+            if low is not None and moved:
+                self.use_food(fid, min(self.tank.w - 4, max(4, low[0])))
+            elif not moved:
+                self.use_food(fid)                 # a normal click: drops near a hungry fish
         if self.drag_spot:
             key, _, moved = self.drag_spot
             self.drag_spot = None
@@ -644,6 +707,10 @@ class Game:
         if self.ui.over_panel(pos) or self.to_low(pos):
             self.note_input()
         self.ui.set_mouse(pos)
+        if self.food_drag and buttons[0]:
+            self.food_drag[1] = pos                # it's being dragged
+            self.mouse_low = self.to_low(pos)
+            return
         if self.ui.sb_drag is not None:
             if buttons[0]:
                 self.ui.drag_scroll_to(self.ui.ui_pos(pos))
@@ -685,6 +752,7 @@ class Game:
         self.sounds.play("nope", 0.2, self.now)
 
     def buy_species(self, sp_id):
+        self.come_home()
         s = self.state
         if sp_id in SEASONAL_BY_ID:
             why = E.seasonal_fish_buyable(s, sp_id)
@@ -714,6 +782,7 @@ class Game:
             self.sounds.play("buy", 0, self.now)
 
     def buy_upgrade(self, uid):
+        self.come_home()
         s = self.state
         u = UPGRADES_BY_ID[uid]
         if E.ulv(s, uid) >= u["max"]:
@@ -740,6 +809,7 @@ class Game:
 
     # ------------------------------------------------------------ jar & hatchery
     def collect_jar(self):
+        self.come_home()
         amt = E.collect_jar(self.state)
         if amt < 1:
             self.toast("The Scale Jar is still filling up.", (200, 200, 230), 2.5)
@@ -751,6 +821,7 @@ class Game:
         return amt
 
     def hatch_ready(self):
+        self.come_home()
         s = self.state
         ready = [e for e in s["eggs"] if e["left"] <= 0]
         total = 0.0
@@ -825,6 +896,7 @@ class Game:
             self.toast(msg[0], msg[1], 7)
 
     def toggle_autonest(self):
+        self.come_home()
         s = self.state
         s["autonest_off"] = not s.get("autonest_off")
         self.toast("Auto-Nest paused - pick any egg you like." if s["autonest_off"] else
@@ -832,6 +904,7 @@ class Game:
 
     def remove_egg(self, egg):
         """take an egg out of the nest (to swap it for a different one)"""
+        self.come_home()
         s = self.state
         if egg not in s["eggs"]:
             return
@@ -843,6 +916,7 @@ class Game:
             self.toast(f"{CLUTCHES_BY_ID[egg['c']]['name']} removed from the nest.", (200, 200, 230), 3)
 
     def collect_all(self):
+        self.come_home()
         got = 0
         if E.ulv(self.state, "jar") and self.state["jar"] >= 1:
             got += self.collect_jar()
@@ -853,6 +927,8 @@ class Game:
 
     # ------------------------------------------------------------ visitors
     def visitor_arrived(self, kind):
+        if self.visiting:
+            return
         self.toast(f"A {kind['name']} is visiting! Click it for a gift.", (170, 230, 255), 6)
         self.sounds.play("pet", 0, self.now)
 
@@ -870,14 +946,99 @@ class Game:
         self.tank.burst(v["x"], v["y"] - 3, (255, 230, 150), 12)
         self.tank.visitor = None
         self.toast(f"The {kind['name']} left you a gift: +{E.fmt(amt)} scales!", (255, 230, 150), 5)
-        if random.random() < MYSTERY_FROM_VISITOR:
+        if random.random() < kind.get("treasure", MYSTERY_FROM_VISITOR):
             self.found_mystery(v["x"], v["y"])
         self.sounds.play("golden", 0, self.now)
 
     # ------------------------------------------------------------ renaming (needs keyboard focus)
     NAME_MAX = 14
 
+    # ------------------------------------------------------------ photo & share codes
+    def take_photo(self):
+        """a picture of the tank, saved in Pictures > Desktop Aquarium"""
+        low = self.tank.draw().copy()
+        k = 4
+        big = pygame.transform.scale(low, (low.get_width() * k, low.get_height() * k))
+        from .pixfont import PixelFont
+        name = (self.visiting or self.state).get("tank_name")
+        f = PixelFont(3)
+        if name:
+            img = f.render(name, True, (60, 40, 12))
+            rr = pygame.Rect(0, 0, img.get_width() + 30, img.get_height() + 14)
+            rr.midbottom = (big.get_width() // 2, big.get_height() - 2)
+            pygame.draw.rect(big, (110, 80, 30), rr)
+            pygame.draw.rect(big, (214, 172, 80), rr.inflate(-4, -4))
+            big.blit(img, img.get_rect(center=rr.center))
+        cap = PixelFont(2).render("Desktop Aquarium  " + time.strftime("%Y-%m-%d"), True, (230, 235, 245))
+        big.blit(cap, (big.get_width() - cap.get_width() - 14, 18))
+        folder = os.path.join(winutil.pictures_dir(), "Desktop Aquarium")
+        try:
+            os.makedirs(folder, exist_ok=True)
+            path = save_png(big, os.path.join(folder, time.strftime("tank %Y-%m-%d %H-%M-%S.png")))
+        except OSError:
+            return self.deny("Couldn't save the photo.")
+        self.tank.burst(self.tank.w / 2, 20, (255, 255, 255), 16)
+        self.sounds.play("buy", 0, self.now)
+        self.toast("Photo saved in Pictures > Desktop Aquarium!", (150, 230, 160), 5)
+        if not self.photo_dir_opened and not os.environ.get("DA_STATUS_FILE") and not os.environ.get("SDL_VIDEODRIVER") == "dummy":
+            self.photo_dir_opened = True
+            winutil.open_folder(folder)
+        return path
+
+    def copy_tank_code(self):
+        code = share.encode(self.state)
+        if winutil.set_clipboard(code):
+            self.toast("Tank code copied! Paste it to a friend so they can visit your tank.", (150, 230, 160), 6)
+        else:
+            self.deny("Couldn't copy to the clipboard.")
+        return code
+
+    def visit_from_clipboard(self):
+        return self.visit(winutil.get_clipboard())
+
+    def visit(self, text):
+        try:
+            vs = share.decode(text, self.state["settings"])
+        except ValueError:
+            return self.deny("Copy a friend's tank code first (it starts with DA1:), then press Visit.")
+        if self.visiting:
+            self.leave_visit()
+        self.ui.panel = None
+        self.my_tank = self.tank
+        t = Tank(self, self.tank_rect.w // self.S)
+        t.state = vs
+        t.view_only = True
+        t.fish.clear()
+        t.toys.clear()
+        t.build_static()
+        t.sync()
+        self.tank = t
+        self.visiting = vs
+        self.toast(f"Visiting {vs['tank_name'] or 'a friend' + chr(39) + 's tank'}! Press Back to my tank when you're done.",
+                   (200, 220, 255), 6)
+        return vs
+
+    def come_home(self):
+        """anything that changes your own tank happens there: stop visiting first"""
+        if self.visiting:
+            self.leave_visit()
+
+    def leave_visit(self):
+        if not self.visiting:
+            return
+        self.visiting = None
+        self.tank = self.my_tank
+        self.my_tank = None
+        if self.tank.w != self.tank_rect.w // self.S:
+            self.tank.resize(self.tank_rect.w // self.S)
+        self.tank.sync()
+
+    def start_tank_name(self):
+        name = self.state.get("tank_name", "")
+        self.start_rename({"_tank": True, "name": name, "named": bool(name)})
+
     def start_rename(self, f):
+        self.come_home()
         self.stop_search()                  # typing goes to the name now, not the Shop search box
         self.renaming = f
         self.rename_text = f["name"]
@@ -890,6 +1051,11 @@ class Game:
         if f is None:
             return
         name = self.rename_text.strip()
+        if f.get("_tank"):
+            if save:
+                self.state["tank_name"] = name
+                self.toast(f"Your tank is now called {name}!" if name else "Tank name removed.", (150, 230, 160), 3)
+            name, save = "", False                 # nothing else to do for a fish
         if save and name:
             f["name"] = name
             f["named"] = True
@@ -937,6 +1103,8 @@ class Game:
         self.prev_fg = None
 
     def key_down(self, e):
+        if self.visiting and e.key == pygame.K_ESCAPE:
+            return self.leave_visit()
         if self.searching:
             if e.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 self.stop_search()
@@ -968,11 +1136,13 @@ class Game:
             return
         from .pixfont import _GLYPHS
         for ch in txt:
-            if ch in _GLYPHS and len(self.rename_text) < self.NAME_MAX:
+            limit = 22 if self.renaming.get("_tank") else self.NAME_MAX
+            if ch in _GLYPHS and len(self.rename_text) < limit:
                 self.rename_text += ch
 
     # ------------------------------------------------------------ themes
     def theme_action(self, tid):
+        self.come_home()
         s = self.state
         th = THEMES_BY_ID[tid]
         if tid not in s["themes"]:
@@ -987,6 +1157,7 @@ class Game:
         self.tank.build_static()
 
     def lay_clutch(self, cid):
+        self.come_home()
         s = self.state
         if len(s["eggs"]) >= E.egg_slots(s):
             return self.deny("All nest slots are full. Upgrade the Hatchery for more.")
@@ -997,6 +1168,7 @@ class Game:
         self.sounds.play("plop", 0, self.now)
 
     def buy_toy(self, tid):
+        self.come_home()
         s = self.state
         if E.toy_lv(s, tid) >= TOY_MAX_LEVEL:
             return
@@ -1015,6 +1187,7 @@ class Game:
 
     def rehome(self, uid):
         """sell a fish from the tank"""
+        self.come_home()
         s = self.state
         if len(s["fish"]) <= 1 and not s.get("pending"):
             return
@@ -1078,7 +1251,12 @@ class Game:
             self.toast(f"{PEARL_TREE_BY_ID[nid]['name']} is now Lv {E.tlv(self.state, nid)}!", (230, 220, 255), 4)
             self.sounds.play("level", 0, self.now)
 
-    def use_food(self, fid):
+    def food_press(self, fid):
+        """food button pressed: a quick click feeds like before, dragging lets you drop it where you want"""
+        self.food_drag = [fid, None]
+
+    def use_food(self, fid, x=None):
+        self.come_home()
         s = self.state
         kind = FOODS_BY_ID[fid]
         if s["earned_total"] < kind["unlock"]:
@@ -1089,7 +1267,7 @@ class Game:
         if not E.spend(s, c):
             return self.deny("Not enough scales.")
         self.food_cd[fid] = self.now + kind["cooldown"]
-        self.tank.drop_food(kind)
+        self.tank.drop_food(kind, x)
         if kind.get("buff"):
             name, dur = kind["buff"]
             s["buffs"][name] = s["buffs"].get(name, 0) + dur
@@ -1103,6 +1281,7 @@ class Game:
                    (170, 210, 255))
 
     def spawn(self):
+        self.come_home()
         s = self.state
         pearls = E.pearls_for(s)
         if pearls <= 0:
@@ -1132,6 +1311,9 @@ class Game:
 
     def change_setting(self, key, value):
         self.state["settings"][key] = value
+        if key == "light":
+            self.tank._tint_key = None
+            self.tank.night_check = 0.0
         if key in ("width", "align", "scale", "monitor", "uiscale"):
             self.relayout()
         elif key in ("opacity", "topmost"):

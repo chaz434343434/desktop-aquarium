@@ -1091,6 +1091,20 @@ def draw_visitor(surf, vid, x, y, right, t):
         pygame.draw.line(surf, pink, (x - 5 * d, y), (x - 8 * d, y - 1 + step))
         surf.set_at((x - 2, y + 2), pink)
         surf.set_at((x + 2, y + 2), pink)
+    elif vid == "diver":
+        suit, helm, glass = (230, 150, 40), (200, 200, 210), (120, 200, 230)
+        pygame.draw.rect(surf, suit, (x - 3, y - 3, 6, 5))                      # body
+        pygame.draw.circle(surf, helm, (x + 3 * d, y - 4), 3)                   # brass-ish helmet
+        surf.set_at((x + 4 * d, y - 4), glass)
+        surf.set_at((x + 3 * d, y - 4), glass)
+        pygame.draw.line(surf, suit, (x - 3 * d, y + 1), (x - 6 * d, y + 2 + step))   # kicking legs
+        pygame.draw.line(surf, suit, (x - 3 * d, y), (x - 6 * d, y - 1 - step))
+        surf.set_at((x - 7 * d, y + 2 + step), (60, 60, 70))
+        surf.set_at((x - 7 * d, y - 1 - step), (60, 60, 70))
+        pygame.draw.rect(surf, (140, 90, 40), (x + 4 * d - 2, y + 1, 5, 4))     # treasure chest
+        pygame.draw.line(surf, (255, 215, 80), (x + 4 * d - 2, y + 2), (x + 4 * d + 2, y + 2))
+        if step:
+            surf.set_at((x + 3 * d, y - 8), (200, 235, 255))                    # air bubbles
 
 
 _scaled = {}

@@ -16,7 +16,7 @@ SAVE_VERSION = 2
 def default_settings():
     return dict(width=0.30, align="right", scale=3, opacity=245, sound=True,
                 volume=0.5, topmost=True, monitor=-1, daynight=True, panel_pos=None, nametags=True, brightness=0,
-                autoupdate=True, uiscale=1.0, power="normal")
+                autoupdate=True, uiscale=1.0, power="normal", light="auto", ambience="off")
 
 
 def new_state(keep=None):
@@ -29,7 +29,7 @@ def new_state(keep=None):
     )
     if keep:
         for k in ("pearls", "spawns", "dex", "settings", "stats", "earned_total", "themes", "theme", "shinies",
-                  "tree", "spots", "mystery", "seasonal_owned"):
+                  "tree", "spots", "mystery", "seasonal_owned", "tank_name"):
             if k in keep:
                 s[k] = keep[k]
         # pearl tree perks that shape a new season
@@ -383,6 +383,8 @@ def pop_interval(s):
         t /= 1 + 0.05 * toy_lv(s, "airstone") + 0.15
     if "frenzy" in s["buffs"]:
         t /= 4
+    if "storm" in s["buffs"]:             # surprise event: bubble storm
+        t /= 5
     return t
 
 

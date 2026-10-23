@@ -6,7 +6,8 @@ import time
 import pygame
 
 from . import sprites
-from .data import SPECIES_BY_ID, TOYS, TOYS_BY_ID, CLUTCHES_BY_ID, THEMES_BY_ID, VISITORS, VISIT_EVERY, SKULL_POP_EVERY
+from .data import (SPECIES_BY_ID, TOYS, TOYS_BY_ID, CLUTCHES_BY_ID, THEMES_BY_ID, VISITORS, VISIT_EVERY,
+                   SKULL_POP_EVERY, CURIOUS_EVERY, CURIOUS_TIME, LIGHTS_BY_ID)
 from . import economy as E
 from .sprites import lerp, dark, light
 
@@ -85,6 +86,8 @@ class FishActor:
         self.shed_t = random.uniform(2, 8)
         self.play_acc = 0.0
         self.skull_t = random.uniform(*SKULL_POP_EVERY)
+        self.beg = 0.0                # > 0: swam over to your mouse and wants to be petted
+        self.beg_travel = 0.0         # time left to get there
 
     @property
     def inverted(self):
@@ -126,6 +129,16 @@ class FishActor:
         r = random.random()
         hab = self.sp["habitat"]
         self.toy = None
+        if self.beg > 0 and t.mouse:
+            self.state = "curious"
+            self.timer = 30.0
+            return
+        if t.night and r < 0.7:              # night time: mostly snoozing
+            self.state = "rest"
+            self.timer = random.uniform(6, 14)
+            if hab == "bottom":
+                self.ty = self.zone()[1]
+            return
         if t.mouse and r < 0.12 and abs(t.mouse[0] - self.x) < 40:
             self.state = "curious"
             self.timer = random.uniform(2, 4)
@@ -147,7 +160,16 @@ class FishActor:
     def update(self, dt):
         t = self.tank
         sp = self.sp
-        speed = sp["speed"] * (1.25 if "frenzy" in t.state["buffs"] else 1.0)
+        speed = sp["speed"] * (1.25 if "frenzy" in t.state["buffs"] else 1.0) * (0.55 if t.night else 1.0)
+        if self.beg > 0:                          # the wait starts once it reaches your cursor
+            if t.mouse and abs(self.x - t.mouse[0]) < 12:
+                self.beg = max(0.0, self.beg - dt)
+            else:
+                self.beg_travel -= dt
+                if self.beg_travel <= 0 or not t.mouse:
+                    self.beg = 0.0
+            if self.beg <= 0 and self.state == "curious":
+                self.state, self.timer = "wander", 0.5
         self.anim += dt * (2.0 + (abs(self.vx) + abs(self.vy)) * 0.35)
         self.levelfx = max(0.0, self.levelfx - dt)
         self.think_t -= dt
@@ -200,8 +222,12 @@ class FishActor:
                 t.state_play(self, dt)
             elif self.state == "curious" and t.mouse:
                 lo, hi = self.zone()
-                self.tx = t.mouse[0] + (-10 if self.x < t.mouse[0] else 10)
+                near = 6 if self.beg > 0 else 10          # wants pets: comes right up to the cursor
+                self.tx = t.mouse[0] + (-near if self.x < t.mouse[0] else near)
                 self.ty = min(hi, max(lo, t.mouse[1]))
+                if self.beg > 0:
+                    spd = max(speed * 1.8, 14) if abs(self.tx - self.x) > 4 else speed * 0.4
+                    self.facing = t.mouse[0] > self.x
             elif abs(self.tx - self.x) + abs(self.ty - self.y) < 2:
                 self.pick_target()
 
@@ -272,6 +298,10 @@ class Tank:
         self.mouse = None
         self.pop_timer = 3.0
         self.ghost = None         # Haunted Lagoon: [x, y, dir, life]
+        self.beg_timer = random.uniform(*CURIOUS_EVERY)
+        self.night = False
+        self.night_check = 0.0
+        self.view_only = False    # a friend's tank you're visiting: look, don't touch
         self.ghost_timer = random.uniform(20, 40)
         self.lanterns = []
         self.surface = pygame.Surface((self.w, self.h))
@@ -453,7 +483,7 @@ class Tank:
             else:
                 x, y = random.uniform(10, self.w - 10), self.sand_y - 4
         if golden is None:
-            golden = random.random() < E.golden_chance(self.state)
+            golden = "golden" in self.state["buffs"] or random.random() < E.golden_chance(self.state)
         self.pops.append(PopBubble(x, y, golden))
 
     def drop_food(self, kind, x=None):
@@ -516,19 +546,22 @@ class Tank:
         return None
 
     # ------------------------------------------------------------ visitors
+    def spawn_visitor(self, kind):
+        right = random.random() < 0.5
+        y = self.sand_y - 1 if kind["where"] == "sand" else random.uniform(WATER_TOP + 10, self.sand_y - 12)
+        self.visitor = dict(v=kind, x=-8.0 if right else self.w + 8.0, y=y, base_y=y, right=right, pause=0.0)
+        self.game.visitor_arrived(kind)
+
     def update_visitor(self, dt):
+        if self.view_only:
+            return
         v = self.visitor
         if v is None:
             self.visit_timer -= dt
             if self.visit_timer <= 0 and self.fish:
                 self.visit_timer = (random.uniform(*VISIT_EVERY) / (1 + 0.15 * E.tlv(self.state, "friends"))
                                     / (1 + 0.2 * E.ulv(self.state, "treats")))
-                kind = random.choices(VISITORS, weights=[x["weight"] for x in VISITORS])[0]
-                right = random.random() < 0.5
-                y = self.sand_y - 1 if kind["where"] == "sand" else random.uniform(WATER_TOP + 10, self.sand_y - 12)
-                self.visitor = dict(v=kind, x=-8.0 if right else self.w + 8.0, y=y, base_y=y, right=right,
-                                    pause=0.0)
-                self.game.visitor_arrived(kind)
+                self.spawn_visitor(random.choices(VISITORS, weights=[x["weight"] for x in VISITORS])[0])
             return
         if v["pause"] > 0:
             v["pause"] -= dt
@@ -546,8 +579,25 @@ class Tank:
         return v is not None and abs(v["x"] - x) <= 8 and v["y"] - 8 <= y <= v["y"] + 3
 
     # ------------------------------------------------------------ day / night
+    def hour(self):
+        if self.hour_override is not None:
+            return self.hour_override
+        lt = time.localtime()
+        return lt.tm_hour + lt.tm_min / 60
+
+    def is_night(self):
+        """fish get sleepy at night (only with the clock lighting)"""
+        st = self.state["settings"]
+        if st.get("light", "auto") != "auto" or not st.get("daynight", True):
+            return False
+        h = self.hour()
+        return h >= 21.5 or h < 6
+
     def daylight(self):
-        """(rgb, alpha) tint for the current real-world time of day"""
+        """(rgb, alpha) tint: the light colour you picked, or the real-world time of day"""
+        light = LIGHTS_BY_ID.get(self.state["settings"].get("light", "auto"), LIGHTS_BY_ID["auto"])
+        if light[0] != "auto":
+            return (light[2], light[3]) if light[2] else None
         if not self.state["settings"].get("daynight", True):
             return None
         if self.hour_override is not None:
@@ -639,8 +689,26 @@ class Tank:
                 from .economy import pop_interval
                 self.pop_timer = pop_interval(s) * random.uniform(0.7, 1.3)
 
+        self.night_check -= dt
+        if self.night_check <= 0:
+            self.night_check = 5.0
+            self.night = self.is_night()
+        if self.mouse and self.fish and not self.view_only:
+            self.beg_timer -= dt
+            if self.beg_timer <= 0:
+                self.beg_timer = random.uniform(*CURIOUS_EVERY) * (2 if self.night else 1)
+                free = [a for a in self.fish.values() if a.beg <= 0 and a.food is None and a.pet_t <= 0]
+                if free:
+                    free.sort(key=lambda a: abs(a.x - self.mouse[0]))          # one of the fish nearby comes
+                    a = random.choice(free[:3])
+                    a.beg, a.beg_travel = float(CURIOUS_TIME), 15.0
+                    a.state, a.timer = "curious", 30.0
         for a in list(self.fish.values()):
             a.update(dt)
+            if self.night and a.state == "rest" and random.random() < dt * 0.25:
+                H = a.sp["size"][1]
+                self.parts.append(Particle("z", a.x + random.uniform(-2, 2), a.y - H / 2 - 2, random.uniform(1, 2), -3,
+                                           2.2, (210, 215, 255)))
             if a.sp.get("season") == "halloween":
                 if random.random() < dt * 0.8:
                     self.add_decor_bubble(a.x + random.uniform(-2, 2), a.y - 3, skull=True)
@@ -869,6 +937,12 @@ class Tank:
             self.draw_ghost(s, t)
         for p in self.parts:
             k = p.life / p.max
+            if p.kind == "z":
+                x, y = int(p.x), int(p.y)
+                c = lerp((90, 110, 150), p.col, min(1, k * 2))
+                for dx, dy in ((0, 0), (1, 0), (2, 0), (1, 1), (0, 2), (1, 2), (2, 2)):
+                    s.set_at((x + dx, y + dy), c)
+                continue
             if p.kind == "heart":
                 x, y = int(p.x), int(p.y)
                 c = lerp((120, 160, 190), p.col, min(1, k * 2))
@@ -886,6 +960,14 @@ class Tank:
                 L = a.sp["size"][0]
                 ang = t * 3 + a.phase
                 s.set_at((int(a.x + math.cos(ang) * L / 2), int(a.y - 3 + math.sin(ang * 1.7) * 2)), (255, 255, 230))
+        for a in self.fish.values():
+            if a.beg > 0 and self.mouse and abs(a.x - self.mouse[0]) < 14:
+                H = a.sp["size"][1] * a.size_k()
+                hx, hy = int(a.x) - 2, int(a.y - H / 2 - 6 + math.sin(t * 5) * 1)
+                c = (255, 120, 160) if int(t * 3) % 2 else (255, 170, 200)
+                for dx, dy in ((0, 0), (1, 0), (3, 0), (4, 0), (0, 1), (1, 1), (2, 1), (3, 1), (4, 1),
+                               (1, 2), (2, 2), (3, 2), (2, 3)):
+                    s.set_at((hx + dx, hy + dy), c)
         for a in self.fish.values():
             if a.levelfx > 0:
                 for i in range(4):
