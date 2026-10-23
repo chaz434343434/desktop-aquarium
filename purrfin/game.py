@@ -878,6 +878,7 @@ class Game:
     NAME_MAX = 14
 
     def start_rename(self, f):
+        self.stop_search()                  # typing goes to the name now, not the Shop search box
         self.renaming = f
         self.rename_text = f["name"]
         self.prev_fg = winutil.foreground()

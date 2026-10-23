@@ -652,6 +652,8 @@ class UI:
         if self.panel == "shop" and (self.tab in ("fish", "toys", "upgrades", "themes") or self.tab.startswith("season:")):
             self.draw_search(scr, pygame.Rect(view.x + 4, view.y, view.w - 16, 28))
             view = pygame.Rect(view.x, view.y + 34, view.w, view.h - 34)
+        elif g.searching:
+            g.stop_search()                 # this tab has no search box: stop typing into an invisible one
         self.view_h = view.h
         key = (self.panel, self.tab)
         off = self.scroll.get(key, 0)
