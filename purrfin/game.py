@@ -150,6 +150,7 @@ class Game:
                 f["named"] = True
         if not s["fish"]:
             E.add_fish(s, "sunflower", "Sunny")
+        E.sync_event_log(s)
         return s
 
     @staticmethod
@@ -1167,6 +1168,7 @@ class Game:
             if not E.spend(s, E.theme_cost(s, tid)):
                 return self.deny("Not enough scales.")
             s["themes"].append(tid)
+            E.remember_seasonal(s, th)
             self.toast(f"Unlocked {th['name']}! +{th['bonus']}% scales forever.", (150, 230, 160), 5)
             self.sounds.play("buy", 0, self.now)
         s["theme"] = tid

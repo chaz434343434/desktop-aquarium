@@ -144,13 +144,33 @@ def season_items(s, season):
 
 
 def active_seasons(s):
-    """holidays that get their own Shop tab (Halloween, later Christmas...)"""
-    return [se for se in SEASONS if any(season_items(s, se).values())]
+    """holidays that get their own Shop tab: only the one that's on right now"""
+    return [se for se in SEASONS if in_season(se) and any(season_items(s, se).values())]
+
+
+def past_seasons(s):
+    """finished holidays this player has something from (the Past Events tab). Empty for everyone else."""
+    return [se for se in SEASONS if not in_season(se) and any(season_items(s, se).values())]
+
+
+def sync_event_log(s):
+    """the log of holiday things a player has had (seasonal_owned): anything on the save goes in it,
+    including things bought before the log covered them. Kept through Spawning Season."""
+    log = s.setdefault("seasonal_owned", [])
+    have = [f["sp"] for f in s.get("fish", []) if f.get("sp") in SEASONAL_BY_ID]
+    have += [f["sp"] for f in s.get("pending", []) if f.get("sp") in SEASONAL_BY_ID]
+    have += [t for t in s.get("toys", {}) if TOYS_BY_ID.get(t, {}).get("season")]
+    have += [u for u, lv in s.get("upgrades", {}).items() if lv and UPGRADES_BY_ID.get(u, {}).get("season")]
+    have += [t for t in s.get("themes", []) if THEMES_BY_ID.get(t, {}).get("season")]
+    for item in have:
+        if item not in log:
+            log.append(item)
 
 
 def theme_visible(s, tid):
     th = THEMES_BY_ID[tid]
-    return not th.get("season") or tid in s.get("themes", []) or in_season(th["season"])
+    return (not th.get("season") or tid in s.get("themes", []) or tid in s.get("seasonal_owned", [])
+            or in_season(th["season"]))
 
 
 def theme_cost(s, tid):

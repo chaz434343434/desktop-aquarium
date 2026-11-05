@@ -34,7 +34,7 @@ save = os.path.join(tempfile.mkdtemp(), "save.json")
 PHOTO_DIR = tempfile.mkdtemp()
 g = Game(save_path=save, fresh=True)
 g.apply_window(first=True)
-TABS = ["fish", "toys", "upgrades", "hatchery", "themes", "mine", "spawn", "season:halloween", "season:thanksgiving"]
+TABS = ["fish", "toys", "upgrades", "hatchery", "themes", "mine", "spawn", "season:halloween", "season:thanksgiving", "past"]
 KEYS = [pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_BACKSPACE, pygame.K_a, pygame.K_TAB]
 
 

@@ -709,21 +709,32 @@ class UI:
             tabs = [("fish", "Catfish"), ("toys", "Toys"), ("upgrades", "Upgrades"), ("hatchery", "Hatchery"),
                     ("themes", "Themes")]
             tabs += [("season:" + se, SEASONS[se]["name"]) for se in seasons]
+            past = E.past_seasons(g.state)
+            if past:
+                tabs += [("past", "Past Events")]
             tabs += [("mine", "My Tank"), ("spawn", "Bills")]
-            if self.tab.startswith("season:") and self.tab[7:] not in seasons:
-                self.tab = "fish"                       # that holiday is over (and you never had any of it)
-            pad, gap = (22, 6) if len(tabs) <= 7 else (14, 4) if len(tabs) == 8 else (10, 3)
+            if (self.tab.startswith("season:") and self.tab[7:] not in seasons) or (self.tab == "past" and not past):
+                self.tab = "fish"                       # that holiday is over / nothing from past events
+            text_w = sum(self.f_norm.size(lab)[0] for _, lab in tabs)
+            room = rr.w - 10 - 44                       # stop short of the close button
+            for pad, gap in ((22, 6), (14, 4), (10, 3), (7, 3), (5, 2)):
+                if text_w + pad * len(tabs) + gap * (len(tabs) - 1) <= room:
+                    break
             x = rr.x + 10
             for key, lab in tabs:
                 tw = self.f_norm.size(lab)[0] + pad
                 if key.startswith("season:"):
                     col = (232, 120, 30) if self.tab == key else (150, 74, 20)
+                elif key == "past":
+                    col = (140, 110, 210) if self.tab == key else (84, 66, 130)
                 else:
                     col = GOOD if self.tab == key else TAB
                 self.button(scr, (x, rr.y + 20, tw, 30), lab, lambda k=key: self.set_tab(k), col=col)
                 x += tw + gap
             if self.tab.startswith("season:"):
                 draw = self.tab_season
+            elif self.tab == "past":
+                draw = self.tab_past
             else:
                 draw = {"fish": self.tab_fish, "toys": self.tab_toys, "upgrades": self.tab_upgrades,
                         "mine": self.tab_mine, "spawn": self.tab_spawn, "hatchery": self.tab_hatchery,
@@ -739,7 +750,7 @@ class UI:
             self.text(scr, title, self.f_big, ACC, (rr.x + 14, rr.y + 22))
         view = pygame.Rect(rr.x + 6, rr.y + 58, rr.w - 12, rr.h - 64)
         self.search_rect = None
-        if self.panel == "shop" and (self.tab in ("fish", "toys", "upgrades", "themes") or self.tab.startswith("season:")):
+        if self.panel == "shop" and (self.tab in ("fish", "toys", "upgrades", "themes", "past") or self.tab.startswith("season:")):
             self.draw_search(scr, pygame.Rect(view.x + 4, view.y, view.w - 16, 28))
             view = pygame.Rect(view.x, view.y + 34, view.w, view.h - 34)
         elif g.searching:
@@ -950,7 +961,8 @@ class UI:
                           f"{t['desc']} Fish that play with it shed scales!", (255, 214, 90) if lv else DIM)]
                 lab = "MAX" if maxed else (("Buy " if lv == 0 else "Up ") + E.fmt(c))
                 if t.get("season") and not lv:
-                    lines[0] = (f"{SEASONS[t['season']]['name']} special!  +{t['bonus']}% scales per level", (255, 170, 80))
+                    when = "special!" if E.in_season(t["season"]) else "toy you've had."
+                    lines[0] = (f"{SEASONS[t['season']]['name']} {when}  +{t['bonus']}% scales per level", (255, 170, 80))
                 self.row(scr, view, y, sprites.toy_icon(t["id"], 2), t["name"], lines, lab,
                          lambda i=t["id"]: g.buy_toy(i), (not maxed) and g.can_afford(c),
                          tcol=(255, 170, 80) if t.get("season") else TEXT)
@@ -1193,14 +1205,39 @@ class UI:
         season = self.tab[7:]
         name = SEASONS[season]["name"]
         y0 = y
-        if E.in_season(season):
-            msg = f"{name} specials! Only for sale around {name} - once you've had one, it's yours to buy again any time."
-        else:
-            msg = f"{name} is over, but you can still buy back the {name} things you've had before."
+        msg = f"{name} specials! Only for sale around {name} - once you've had one, it's yours to buy again any time."
         for ln in self.wrap(msg, self.f_small, view.w - 30):
             self.text(scr, ln, self.f_small, (255, 190, 120), (view.x + 8, y + 2))
             y += 18
         y += 6
+        used, found = self.season_sections(scr, view, y, season)
+        y += used
+        y += self.no_matches(scr, view, y, found)
+        return y - y0
+
+    def tab_past(self, scr, view, y):
+        """the log: things from finished holidays this player has had, to use or buy again any time"""
+        g, s = self.g, self.g.state
+        y0 = y
+        msg = "Everything you've had from past events. Buy it again any time, even after a Spawning Season."
+        for ln in self.wrap(msg, self.f_small, view.w - 30):
+            self.text(scr, ln, self.f_small, (205, 190, 255), (view.x + 8, y + 2))
+            y += 18
+        y += 6
+        found = False
+        for season in E.past_seasons(s):
+            self.text(scr, SEASONS[season]["name"], self.f_big, ACC, (view.x + 8, y))
+            y += 30
+            used, any_found = self.season_sections(scr, view, y, season)
+            y += used
+            found = found or any_found
+        y += self.no_matches(scr, view, y, found)
+        return y - y0
+
+    def season_sections(self, scr, view, y, season):
+        """one holiday's feasts, catfish, theme, toys and upgrades, under small headers"""
+        s = self.g.state
+        y0 = y
         items = E.season_items(s, season)
         found = False
         for key, title, fn in (("feasts", "Limited-edition feasts", self.tab_feasts), ("fish", "Catfish", self.tab_fish),
@@ -1213,8 +1250,7 @@ class UI:
             y += 26
             y += fn(scr, view, y, season=season)
             y += 6
-        y += self.no_matches(scr, view, y, found)
-        return y - y0
+        return y - y0, found
 
     def tab_hatchery(self, scr, view, y):
         g, s = self.g, self.g.state

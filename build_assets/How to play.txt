@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.8.0)
+DESKTOP AQUARIUM  (version 1.8.1)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -52,7 +52,8 @@ WHEN YOU COME BACK
 
 HOLIDAY SPECIALS
   - Some things are only for sale during a holiday (by your computer's date). They have their
-    own tab in the Shop, named after the holiday (the orange "Halloween" tab).
+    own tab in the Shop while the holiday is on. Afterwards, anything you bought is listed under
+    Past Events in the Shop, where you can buy it again any time.
     Thanksgiving (November 3 - 30): the Turkey Catfish, the Harvest Cove theme, toys, upgrades
     and limited-edition feasts: a whole turkey sinks to the sand and every fish eats off it!
     Halloween (October 1 - November 2): the Haunted Lagoon theme, the Pumpkin Catfish,
