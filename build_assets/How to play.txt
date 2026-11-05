@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.7.0)
+DESKTOP AQUARIUM  (version 1.8.0)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -53,6 +53,8 @@ WHEN YOU COME BACK
 HOLIDAY SPECIALS
   - Some things are only for sale during a holiday (by your computer's date). They have their
     own tab in the Shop, named after the holiday (the orange "Halloween" tab).
+    Thanksgiving (November 3 - 30): the Turkey Catfish, the Harvest Cove theme, toys, upgrades
+    and limited-edition feasts: a whole turkey sinks to the sand and every fish eats off it!
     Halloween (October 1 - November 2): the Haunted Lagoon theme, the Pumpkin Catfish,
     4 spooky toys (Jack-o'-Lantern, Witch's Cauldron, Fishbone Skeleton, Candy Corn) and
     3 upgrades (Ghostly Glow, Spooky Bubbles, Trick-or-Treat).
@@ -64,10 +66,11 @@ HOLIDAY SPECIALS
     upgrades can be bought again after a Spawning Season, any time of year.
 
 THE LONG GAME
-  - Later on, Shop > Pearls lets you start a new Spawning Season. You lose your fish and
-    upgrades, but earn Pearls.
-  - Spend Pearls in the Pearl Tree for bonuses that last forever: more scales, faster eggs,
-    a head start, luckier bubbles and more.
+  - Shop > Bills: pay your tank's bills to earn pearls. Each bill costs real scales and more
+    than the last. Pay on time for a bonus pearl; being late never costs you anything.
+  - When you're ready, start a Spawning Season: you lose your fish and upgrades, collect your
+    pearls, and spend them on Rings - bonuses that last forever (more scales, faster eggs, a
+    head start, cheaper bills and more).
   - There are 100 catfish to collect, including the Blue Channel Catfish, drawn by a friend.
     Number 100 is the Infinity Catfish. Prices count up through names like Dc (decillion),
     Vg (vigintillion), Tg (trigintillion) all the way to Ce (centillion).

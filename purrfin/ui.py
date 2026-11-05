@@ -5,10 +5,10 @@ from . import economy as E
 from . import sprites
 from .pixfont import PixelFont
 from .version import VERSION
-from .data import SEASONAL_SPECIES, SEASONS, RUB_COOLDOWN, LIGHTS, FOODS_BY_ID
+from .data import SEASONAL_SPECIES, SEASONS, RUB_COOLDOWN, LIGHTS, FOODS_BY_ID, FEASTS
 from .data import (SPECIES, SPECIES_BY_ID, FOODS, TOYS, UPGRADES, TOY_MAX_LEVEL, TANK_NAMES, CLUTCHES, THEMES,
                    CLUTCHES_BY_ID,
-                   TANK_CAPACITY, SPAWN_MIN, PEARL_BONUS, PEARL_TREE, PEARL_TREE_BY_ID)
+                   TANK_CAPACITY, PEARL_BONUS, PEARL_TREE, PEARL_TREE_BY_ID)
 
 BG = (30, 36, 56)
 BG2 = (44, 54, 80)
@@ -391,7 +391,7 @@ class UI:
                f"All bonuses: x{E.global_mult(s):.2f}", f"Bubble power boosts fish: x{E.fmt(E.fish_boost(s))}",
                f"Lifetime: {E.fmt(s['earned_total'])}"]
         if s["pearls"]:
-            tip.append(f"Pearls: {s['pearls']} to spend (Shop > Pearls)")
+            tip.append(f"Pearls: {s['pearls']} to spend (Shop > Bills)")
         self.tips.append((pill, tip))
         x = pill.right + 8
         for fd in foods:
@@ -709,10 +709,10 @@ class UI:
             tabs = [("fish", "Catfish"), ("toys", "Toys"), ("upgrades", "Upgrades"), ("hatchery", "Hatchery"),
                     ("themes", "Themes")]
             tabs += [("season:" + se, SEASONS[se]["name"]) for se in seasons]
-            tabs += [("mine", "My Tank"), ("spawn", "Pearls")]
+            tabs += [("mine", "My Tank"), ("spawn", "Bills")]
             if self.tab.startswith("season:") and self.tab[7:] not in seasons:
                 self.tab = "fish"                       # that holiday is over (and you never had any of it)
-            pad, gap = (22, 6) if len(tabs) <= 7 else (14, 4)
+            pad, gap = (22, 6) if len(tabs) <= 7 else (14, 4) if len(tabs) == 8 else (10, 3)
             x = rr.x + 10
             for key, lab in tabs:
                 tw = self.f_norm.size(lab)[0] + pad
@@ -998,6 +998,24 @@ class UI:
             if not l:
                 return "Not built yet"
             return f"{E.egg_slots(s)} nest slot(s), hatch time x{E.hatch_speed(s):.2f}, rewards +{10 * (l - 1)}%"
+        if uid == "harvestmoon":
+            return f"Now +{10 * l}% scales"
+        if uid == "seconds":
+            return f"Feasts last +{25 * l}% longer"
+        if uid == "gravy":
+            return f"Feasts come back in x{0.85 ** l:.2f} the time"
+        if uid == "reefguard":
+            return f"Now +{25 * l}% scales"
+        if uid == "moonbubble":
+            return f"Pop-bubbles +{25 * l}%"
+        if uid == "deepfeed":
+            return f"+{E.passive_xp(s):.1f} XP/s per fish"
+        if uid == "starfilter":
+            return f"Now +{25 * l}% scales"
+        if uid == "voidpump":
+            return f"Toys pay +{50 * l}%"
+        if uid == "eternaltide":
+            return f"Now +{50 * l}% scales"
         if uid == "ghostglow":
             return f"Now +{10 * l}% scales"
         if uid == "spooky":
@@ -1151,6 +1169,24 @@ class UI:
             y += self.no_matches(scr, view, y, False)
         return y - y0
 
+    def tab_feasts(self, scr, view, y, season=None):
+        """big meals: one sinks to the sand and every fish comes to eat off it"""
+        g, s = self.g, self.g.state
+        y0 = y
+        for f in FEASTS:
+            if f["season"] != season or not E.in_season(season) or not self.match(f["name"]):
+                continue
+            c = E.feast_cost(s, f)
+            wait = g.food_cd.get(f["id"], 0) - g.now
+            busy = bool(g.tank.feast)
+            lab = "Eating..." if busy else f"Ready in {E.fmt_time(wait + 1)}" if wait > 0 else E.fmt(c)
+            ok = not busy and wait <= 0 and g.can_afford(c)
+            lines = [(f"{E.feast_bites(s, f)} bites, each worth {f['bite_secs']}s of income", (255, 170, 80)), f["desc"]]
+            self.row(scr, view, y, sprites.feast_icon(f["id"]), f["name"], lines, lab,
+                     lambda i=f["id"]: g.serve_feast(i), ok, tcol=(255, 170, 80))
+            y += ROW_H
+        return y - y0
+
     def tab_season(self, scr, view, y):
         """everything of one holiday in one place: its catfish, theme, toys and upgrades"""
         g, s = self.g, self.g.state
@@ -1167,7 +1203,8 @@ class UI:
         y += 6
         items = E.season_items(s, season)
         found = False
-        for key, title, fn in (("fish", "Catfish", self.tab_fish), ("themes", "Tank theme", self.tab_themes),
+        for key, title, fn in (("feasts", "Limited-edition feasts", self.tab_feasts), ("fish", "Catfish", self.tab_fish),
+                               ("themes", "Tank theme", self.tab_themes),
                                ("toys", "Toys", self.tab_toys), ("upgrades", "Upgrades", self.tab_upgrades)):
             if not [i for i in items[key] if self.match(i["name"], i.get("desc", ""), i.get("blurb", ""))]:
                 continue
@@ -1310,27 +1347,46 @@ class UI:
     def tab_spawn(self, scr, view, y):
         g, s = self.g, self.g.state
         y0 = y
-        lines = ("Spawning Season: release your tank into the river and start fresh. Your catfish leave "
-                 "you Pearls to spend in the Pearl Tree below - those bonuses last forever. You keep pearls, "
-                 "the tree, Fishdex, themes and shinies. Scales, fish, toys and upgrades reset.")
+        lines = ("Pay your tank's bills to earn pearls. Then start a Spawning Season: release your tank into the "
+                 "river, collect the pearls and spend them on Rings, which last forever. You keep pearls, Rings, "
+                 "Fishdex, themes and shinies. Scales, fish, toys and upgrades reset.")
         for ln in self.wrap(lines, self.f_small, view.w - 30):
             self.text(scr, ln, self.f_small, TEXT, (view.x + 10, y))
             y += 17
-        y += 10
+        y += 8
+        # ---- the next bill
+        b = E.bill_info(s)
+        due = s.get("bill_due")
+        rr = pygame.Rect(view.x + 4, y, view.w - 16, 86)
+        self.box(scr, rr, BG2)
+        self.text(scr, f"Bill #{s.get('bills_paid', 0) + 1}: {b['name']}", self.f_norm, ACC, (rr.x + 12, rr.y + 8))
+        self.text(scr, f"Costs {E.fmt(b['cost'])} scales.  Worth {b['pearls']} pearl{'s' if b['pearls'] != 1 else ''}"
+                       f" (+{b['bonus']} if paid on time)", self.f_small, TEXT, (rr.x + 12, rr.y + 32))
+        if due is None:
+            note, col = "The on-time clock starts once you can afford it.", DIM
+        elif due > 0:
+            note, col = f"Pay within {E.fmt_time(due)} for the on-time bonus.", (170, 240, 170)
+        else:
+            note, col = "Late: no bonus, but no harm done. Pay it whenever you like.", (255, 190, 140)
+        self.text(scr, note, self.f_small, col, (rr.x + 12, rr.y + 54))
+        afford = g.can_afford(b["cost"])
+        self.button(scr, (rr.right - 130, rr.y + 8, 120, 32), "Pay", g.pay_bill, enabled=afford, col=GOOD)
+        self.button(scr, (rr.right - 130, rr.y + 46, 120, 30), "Pay all I can", g.pay_all_bills, enabled=afford,
+                    col=NAV, font=self.f_small)
+        y += 96
+        # ---- pearls and spawning
         p = E.pearls_for(s)
         scr.blit(sprites.pearl_icon(4), (view.x + 10, y))
         self.text(scr, f"Pearls to spend: {s['pearls']}   (seasons: {s['spawns']})", self.f_big, TEXT,
                   (view.x + 44, y))
         y += 34
-        self.text(scr, f"Scales this season: {E.fmt(s['earned_run'])}", self.f_norm, DIM, (view.x + 10, y))
-        y += 22
-        if s["earned_run"] < SPAWN_MIN:
-            self.text(scr, f"Need {E.fmt(SPAWN_MIN)} scales this season to spawn.", self.f_norm, (255, 160, 160),
-                      (view.x + 10, y))
-            self.bar(scr, (view.x + 10, y + 24, view.w - 40, 12), s["earned_run"] / SPAWN_MIN, (200, 190, 240))
-            y += 50
+        self.text(scr, f"Bills paid this season: {s.get('bills_paid', 0)}", self.f_norm, DIM, (view.x + 10, y))
+        y += 24
+        if p <= 0:
+            self.text(scr, "Pay a bill to be able to spawn.", self.f_norm, (255, 160, 160), (view.x + 10, y))
+            y += 30
         else:
-            self.text(scr, f"Spawning now gives +{p} pearls", self.f_norm, (200, 255, 200), (view.x + 10, y))
+            self.text(scr, f"Spawning now collects +{p} pearls", self.f_norm, (200, 255, 200), (view.x + 10, y))
             y += 30
             conf = self.confirm == ("spawn",)
 
@@ -1344,7 +1400,8 @@ class UI:
                         cb, col=BAD if conf else (120, 100, 190))
             y += 44
         y += 6
-        self.text(scr, "PEARL TREE", self.f_big, ACC, (view.x + 10, y))
+        self.text(scr, "RINGS", self.f_big, ACC, (view.x + 10, y))
+        self.text(scr, "Yours forever, even after Spawning Season.", self.f_small, DIM, (view.x + 110, y + 8))
         y += 34
         return y - y0 + self.draw_tree(scr, view, y)
 
@@ -1352,7 +1409,7 @@ class UI:
         g, s = self.g, self.g.state
         cols = 4
         cw = (view.w - 20) // cols
-        bw, bh, rh = cw - 14, 112, 136
+        bw, bh, rh = cw - 14, 128, 150
         boxes = {}
         for n in PEARL_TREE:
             boxes[n["id"]] = pygame.Rect(view.x + 6 + n["col"] * cw, y + n["row"] * rh, bw, bh)
@@ -1372,7 +1429,7 @@ class UI:
             self.text(scr, n["name"], self.f_norm, tcol, (r.x + 8, r.y + 6))
             self.text(scr, f"Lv {lv}/{n['max']}", self.f_small, (200, 180, 255), (r.x + 8, r.y + 26))
             yy = r.y + 44
-            for ln in self.wrap(n["desc"], self.f_small, r.w - 16)[:2]:
+            for ln in self.wrap(n["desc"], self.f_small, r.w - 16)[:3]:
                 self.text(scr, ln, self.f_small, DIM if st == "locked" else TEXT, (r.x + 8, yy))
                 yy += 15
             if st == "max":

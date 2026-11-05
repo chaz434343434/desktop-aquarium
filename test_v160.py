@@ -33,7 +33,7 @@ rates = [sp["rate"] for sp in SPECIES]
 check("every catfish costs more than the last", all(b > a for a, b in zip(costs, costs[1:])))
 check("and earns more", all(b > a for a, b in zip(rates, rates[1:])))
 late = [costs[i + 1] / costs[i] for i in range(41, 99)]
-check("after the Blue Channel, prices grow x3 per catfish (same as what they earn)", all(abs(x - 3) < 1e-9 for x in late))
+check("after the Blue Channel, prices grow a steady x3.6 per catfish", all(abs(x - 3.6) < 1e-9 for x in late))
 check(f"the top price is a normal number ({E.fmt(costs[-1])})", costs[-1] < 1e100 and not E.fmt(costs[-1]).startswith("MAX"))
 for sp in SPECIES:
     sprites.fish_frames(sp["id"])

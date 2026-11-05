@@ -159,6 +159,7 @@ g.buy_tree("headstart")
 g.buy_tree("keeptoys")
 s["toys"]["apple"] = dict(lv=3)
 s["earned_run"] = 1e18
+s["bill_pearls"] = 5        # pearls come from paid bills now
 g.ui.panel, g.ui.tab = "shop", "spawn"
 shot("pearl_tree")
 g.spawn()

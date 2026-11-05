@@ -193,6 +193,21 @@ class FishActor:
             self.tx, self.ty = self.x, self.y
             self.anim += dt * 6
             spd = 0
+        elif t.feast:
+            fe = t.feast
+            # everyone gets their own spot around the meal
+            ang = self.f["uid"] * 2.4                        # spread evenly around it, like a dinner table
+            self.tx = min(t.w - 6, max(6, fe["x"] + (1 if math.cos(ang) >= 0 else -1) * (20 + 16 * abs(math.cos(ang)))))
+            lo, hi = self.zone()
+            self.ty = min(max(hi, t.sand_y - 3), max(WATER_TOP + 3, fe["y"] - 7 - 12 * abs(math.sin(ang))))
+            spd = max(speed * 1.8, 14)
+            self.beg = 0.0
+            self.bite_t = getattr(self, "bite_t", random.uniform(0, 1)) - dt
+            if abs(self.x - self.tx) < 8 and self.bite_t <= 0:
+                self.bite_t = random.uniform(1.0, 1.8)
+                self.facing = fe["x"] > self.x
+                self.anim += 2
+                t.feast_bite(self)
         elif self.food is not None:
             self.tx, self.ty = self.food.x, self.food.y
             spd = speed * 1.7
@@ -302,6 +317,7 @@ class Tank:
         self.night = False
         self.night_check = 0.0
         self.view_only = False    # a friend's tank you're visiting: look, don't touch
+        self.feast = None         # dict(f, x, y, bites, total, settled, t) while a big meal is in the tank
         self.ghost_timer = random.uniform(20, 40)
         self.lanterns = []
         self.surface = pygame.Surface((self.w, self.h))
@@ -359,6 +375,8 @@ class Tank:
         self.lanterns = []
         if th["id"] == "haunted":
             self.build_haunted(bg, rng)
+        elif th["id"] == "harvest":
+            self.build_harvest(bg, rng)
         # frame
         pygame.draw.rect(bg, (26, 28, 36), (0, 0, w, RIM))
         pygame.draw.line(bg, (78, 82, 96), (0, 1), (w, 1))
@@ -414,6 +432,24 @@ class Tank:
         while x < w - 10:
             self.lanterns.append((int(x), sy + 2))
             x += rng.uniform(55, 110)
+
+    def build_harvest(self, bg, rng):
+        """hay bales, fallen leaves and a big orange harvest moon"""
+        w, sy = self.w, self.sand_y
+        mx, my = 22, WATER_TOP + 11
+        pygame.draw.circle(bg, (246, 176, 86), (mx, my), 7)
+        pygame.draw.circle(bg, (252, 200, 120), (mx - 2, my - 2), 3)
+        x = rng.uniform(16, 40)
+        while x < w - 14:
+            bx = int(x)
+            pygame.draw.rect(bg, (214, 180, 90), (bx, sy - 6, 11, 7))
+            pygame.draw.line(bg, (166, 130, 60), (bx + 3, sy - 6), (bx + 3, sy))
+            pygame.draw.line(bg, (166, 130, 60), (bx + 8, sy - 6), (bx + 8, sy))
+            pygame.draw.line(bg, (236, 206, 130), (bx, sy - 6), (bx + 10, sy - 6))
+            x += rng.uniform(55, 120)
+        for _ in range(w // 8):
+            bg.set_at((rng.randint(2, w - 3), rng.randint(sy + 1, self.h - STAND - 1)),
+                      rng.choice(((214, 110, 40), (190, 70, 40), (230, 170, 60))))
 
     def draw_lanterns(self, s, t):
         for i, (x, y) in enumerate(self.lanterns):
@@ -546,6 +582,22 @@ class Tank:
         return None
 
     # ------------------------------------------------------------ visitors
+    def start_feast(self, f, bites):
+        x = random.uniform(self.w * 0.3, self.w * 0.7)
+        self.feast = dict(f=f, x=x, y=float(WATER_TOP + 2), bites=bites, total=bites, settled=False)
+
+    def feast_bite(self, actor):
+        fe = self.feast
+        if not fe:
+            return
+        fe["bites"] -= 1
+        self.heart(actor.x, actor.y - 2)
+        self.burst(fe["x"] + random.uniform(-12, 12), fe["y"] - 8, fe["f"]["color"], 2)
+        self.game.feast_bite(actor, fe["f"])
+        if fe["bites"] <= 0:
+            self.feast = None
+            self.game.toast(f"All gone! That was a good {fe['f']['name']}.", (255, 200, 120), 4)
+
     def spawn_visitor(self, kind):
         right = random.random() < 0.5
         y = self.sand_y - 1 if kind["where"] == "sand" else random.uniform(WATER_TOP + 10, self.sand_y - 12)
@@ -709,6 +761,12 @@ class Tank:
                 H = a.sp["size"][1]
                 self.parts.append(Particle("z", a.x + random.uniform(-2, 2), a.y - H / 2 - 2, random.uniform(1, 2), -3,
                                            2.2, (210, 215, 255)))
+            if a.sp.get("season") == "thanksgiving":
+                a.skull_t -= dt
+                if a.skull_t <= 0:
+                    a.skull_t = random.uniform(28, 45)
+                    if not s["chill"]:
+                        self.spawn_pop(a.x, a.y - 3, golden=True)
             if a.sp.get("season") == "halloween":
                 if random.random() < dt * 0.8:
                     self.add_decor_bubble(a.x + random.uniform(-2, 2), a.y - 3, skull=True)
@@ -747,6 +805,17 @@ class Tank:
             if fd.life <= 0:
                 self.foods.remove(fd)
 
+        fe = self.feast
+        if fe and not fe["settled"]:
+            fe["y"] += fe["f"]["sink"] * dt * 2
+            if fe["y"] >= self.sand_y + 1:
+                fe["y"], fe["settled"] = float(self.sand_y + 1), True
+                self.burst(fe["x"], fe["y"], (230, 210, 170), 10)
+                self.game.sounds.play("plop", 0, self.game.now)
+        if s.get("theme") == "harvest" and random.random() < dt * 0.5:     # falling leaves
+            self.parts.append(Particle("leaf", random.uniform(4, self.w - 4), WATER_TOP + 1, random.uniform(-2, 2),
+                                       random.uniform(4, 7), 7.0,
+                                       random.choice(((214, 110, 40), (190, 70, 40), (230, 170, 60)))))
         # decor bubbles
         for b in list(self.decor):
             b[1] += b[2] * dt
@@ -907,6 +976,9 @@ class Tank:
             a.draw(s, t)
             if a.f["full"] < 25 and (int(t * 1.5 + a.phase) % 3 == 0):
                 self.draw_thought(s, a)
+        if self.feast:                          # in front of the fish, so you can always see it
+            fe = self.feast
+            sprites.draw_feast(s, fe["f"]["id"], fe["x"], fe["y"], fe["bites"] / max(1, fe["total"]), t)
         ball = self.toys.get("ball")
         if ball:
             sprites.draw_toy(s, "ball", ball.x, ball.y + 3, t)
@@ -937,6 +1009,11 @@ class Tank:
             self.draw_ghost(s, t)
         for p in self.parts:
             k = p.life / p.max
+            if p.kind == "leaf":
+                x, y = int(p.x + math.sin(p.life * 3) * 2), int(p.y)
+                s.set_at((x, y), p.col)
+                s.set_at((x + 1, y), p.col)
+                continue
             if p.kind == "z":
                 x, y = int(p.x), int(p.y)
                 c = lerp((90, 110, 150), p.col, min(1, k * 2))

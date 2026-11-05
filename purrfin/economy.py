@@ -8,9 +8,10 @@ import time
 from .data import (SPECIES, SPECIES_BY_ID, FOODS_BY_ID, TOYS, TOYS_BY_ID, UPGRADES_BY_ID, CLUTCHES_BY_ID,
                    THEMES_BY_ID, SHINY_CHANCE, PEARL_TREE_BY_ID, GOLDEN_EGG_SHINY,
                    TANK_CAPACITY, TOY_LEVEL_GROWTH, COPY_GROWTH, FISH_NAMES,
-                   SPAWN_MIN, PEARL_BONUS, SEASONS, SEASONAL_BY_ID, RUB_BASE)
+                   PEARL_BONUS, SEASONS, SEASONAL_BY_ID, RUB_BASE, BILL_BASE, BILL_GROWTH, BILL_TIME, BILL_NAMES,
+                   FEASTS)
 
-SAVE_VERSION = 2
+SAVE_VERSION = 3
 
 
 def default_settings():
@@ -24,6 +25,7 @@ def new_state(keep=None):
         version=SAVE_VERSION, bubbles=0.0, earned_run=0.0, earned_total=0.0,
         pearls=0, spawns=0, fish=[], next_uid=1, upgrades={}, toys={}, dex=[], jar=0.0, eggs=[],
         themes=["classic"], theme="classic", shinies=[], tree={}, pending=[], spots={}, mystery=0, seasonal_owned=[],
+        bills_paid=0, bill_pearls=0, bill_due=None,
         buffs={}, chill=False, settings=default_settings(), last_time=time.time(),
         stats=dict(pets=0, pops=0, fed=0, playtime=0.0),
     )
@@ -133,6 +135,7 @@ def season_items(s, season):
     """everything of one holiday the player can see right now: in season, or owned before"""
     from .data import SEASONAL_SPECIES, THEMES, TOYS, UPGRADES
     return dict(
+        feasts=[f for f in FEASTS if f["season"] == season and in_season(season)],
         fish=[sp for sp in SEASONAL_SPECIES if sp["season"] == season and seasonal_fish_buyable(s, sp["id"]) != "season"],
         themes=[t for t in THEMES if t.get("season") == season and theme_visible(s, t["id"])],
         toys=[t for t in TOYS if t.get("season") == season and (toy_lv(s, t["id"]) or seasonal_ok(s, t))],
@@ -316,6 +319,11 @@ def global_mult(s):
     m *= 1 + sum(THEMES_BY_ID[t]["bonus"] for t in s.get("themes", []) if t in THEMES_BY_ID) / 100
     m *= 1 + PEARL_BONUS * tlv(s, "gills")
     m *= 1 + 0.10 * ulv(s, "ghostglow")
+    m *= 1 + 0.10 * ulv(s, "harvestmoon")
+    m *= 1 + 0.25 * ulv(s, "reefguard")
+    m *= 1 + 0.25 * ulv(s, "starfilter")
+    m *= 1 + 0.5 * ulv(s, "eternaltide")
+    m *= 2 ** tlv(s, "crown")
     if "double" in s["buffs"]:
         m *= 2
     return m
@@ -342,7 +350,7 @@ def base_income(s):
 def bubble_power(s):
     """everything that makes each pop-bubble worth more"""
     return ((1 + 0.35 * ulv(s, "magnet")) * (1 + 0.25 * tlv(s, "lucky")) * (1 + ulv(s, "polish"))
-            * (1 + 0.4 * ulv(s, "spooky")))
+            * (1 + 0.4 * ulv(s, "spooky")) * (1 + 0.25 * ulv(s, "moonbubble")) * (1 + 0.5 * tlv(s, "bubblering")))
 
 
 FISH_SHED = 0.5        # fish shed about half as much as all your pop-bubbles are worth
@@ -356,7 +364,7 @@ def fish_boost(s):
     if toy_lv(s, "airstone"):
         t /= 1 + 0.05 * toy_lv(s, "airstone") + 0.15
     per_sec = 12 * bubble_power(s) * (1 + 9 * golden_chance(s)) / t     # bubbles' worth per second, in fish-seconds
-    return max(1.0, FISH_SHED * per_sec)
+    return max(1.0, FISH_SHED * per_sec) * (1 + 0.5 * tlv(s, "fishring"))
 
 
 def fish_mult(s):
@@ -603,12 +611,13 @@ def toy_play_value(s, f, tid):
     """scales paid out each time fish `f` finishes a play pulse with toy `tid`"""
     t = TOYS_BY_ID[tid]
     lv = max(1, toy_lv(s, tid))
-    pump = (1 + PUMP_EFF * ulv(s, "pump")) * (1 + 0.25 * tlv(s, "playful")) * (1 + 0.5 * ulv(s, "current"))
+    pump = ((1 + PUMP_EFF * ulv(s, "pump")) * (1 + 0.25 * tlv(s, "playful")) * (1 + 0.5 * ulv(s, "current"))
+            * (1 + 0.5 * ulv(s, "voidpump")))
     return max(1.0, fish_rate(s, f) * global_mult(s) * t["pay"] * (1 + 0.5 * (lv - 1)) * pump)
 
 
 def passive_xp(s):
-    return 0.06 * ulv(s, "light")
+    return 0.06 * ulv(s, "light") + 0.5 * ulv(s, "deepfeed")
 
 
 def offline_terms(s):
@@ -618,9 +627,65 @@ def offline_terms(s):
 
 
 def pearls_for(s):
-    if s["earned_run"] < SPAWN_MIN:
-        return 0
-    return int(5 * math.sqrt(s["earned_run"] / SPAWN_MIN))
+    """pearls collected if you spawn now: what the bills you've paid this season were worth"""
+    return s.get("bill_pearls", 0)
+
+
+# ---------------------------------------------------------------- tank bills
+def bill_info(s, n=None):
+    """the next bill: name, cost and pearls (plus the on-time bonus)"""
+    n = s.get("bills_paid", 0) if n is None else n
+    round_no = n // len(BILL_NAMES)
+    name = BILL_NAMES[n % len(BILL_NAMES)] + (f" {round_no + 1}" if round_no else "")
+    try:
+        cost = BILL_BASE * BILL_GROWTH ** n * 0.9 ** tlv(s, "thrift")
+    except OverflowError:
+        cost = float("inf")
+    return dict(name=name, cost=cost, pearls=1 + n // 4, bonus=1 + tlv(s, "early"))
+
+
+def tick_bills(s, dt):
+    """the on-time clock starts when you can afford the bill, and only runs while the game is open.
+    Returns the bill if one has just arrived."""
+    b = bill_info(s)
+    if s.get("bill_due") is None:
+        if s["bubbles"] >= b["cost"]:
+            s["bill_due"] = float(BILL_TIME)
+            return b
+        return None
+    s["bill_due"] = max(0.0, s["bill_due"] - dt)
+    return None
+
+
+def pay_bill(s):
+    """pay the next bill if you can. Returns (bill, pearls earned) or None."""
+    b = bill_info(s)
+    if s["bubbles"] < b["cost"]:
+        return None
+    s["bubbles"] -= b["cost"]
+    due = s.get("bill_due")
+    pearls = b["pearls"] + (b["bonus"] if due is None or due > 0 else 0)
+    s["bill_pearls"] = s.get("bill_pearls", 0) + pearls
+    s["bills_paid"] = s.get("bills_paid", 0) + 1
+    s["bill_due"] = None
+    return b, pearls
+
+
+def exchange_old_pearls(p):
+    """pearls saved under the old formula (which could reach the trillions) -> the new, smaller scale"""
+    return p if p <= 20 else int(20 + 15 * math.log10(p / 20))
+
+
+def feast_cost(s, f):
+    return max(f["min"], income(s) * f["cost_secs"])
+
+
+def feast_cooldown(s, f):
+    return f["cooldown"] * 0.85 ** ulv(s, "gravy")
+
+
+def feast_bites(s, f):
+    return int(f["bites"] * (1 + 0.25 * ulv(s, "seconds")))
 
 
 # ---------------------------------------------------------------- mutations

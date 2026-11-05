@@ -515,7 +515,7 @@ SPECIES = [
 SPECIES_COST0 = 40       # cost of species #1 (#0 is the starter)
 # Price growth per species tier, tuned with sim_school.py for a school day:
 # fast & clicky for the first ~15 min, then roughly one new species per class period.
-SPECIES_GROWTH = [(8, 9.0), (12, 13.0), (18, 7.5), (40, 6.0), (999, 3.0)]   # (up to tier, growth)
+SPECIES_GROWTH = [(8, 9.0), (12, 13.0), (18, 7.5), (40, 6.0), (999, 3.6)]   # (up to tier, growth)
 SPECIES_RATE0 = 1.0
 SPECIES_RATEG = 3.0
 COPY_GROWTH = 1.55       # each extra copy of the same species costs this much more
@@ -535,6 +535,7 @@ SPECIES_BY_ID = {s["id"]: s for s in SPECIES}
 # Once you've had one, you keep it - and can buy it again after Spawning Season, any time of year.
 SEASONS = {
     "halloween": dict(name="Halloween", start=(10, 1), end=(11, 2)),     # (month, day), both inclusive
+    "thanksgiving": dict(name="Thanksgiving", start=(11, 3), end=(11, 30)),
 }
 
 # Seasonal catfish: not part of the normal species ladder. They earn a multiple of your best
@@ -546,6 +547,12 @@ SEASONAL_SPECIES = [
          habitat="bottom", speed=9, purrs=True, season="halloween",
          best_mult=2.0, cost_secs=900, cost_min=300,
          blurb="Carved with a spooky grin. Blows skull bubbles worth 3x!"),
+    dict(id="turkey", name="Turkey Catfish", shape="long", size=(15, 8),
+         body=(120, 76, 40), belly=(190, 150, 100), fin=(226, 120, 40),
+         pattern="turkey", pat=(80, 48, 24), tail="fork", barbel=3,
+         habitat="mid", speed=9, purrs=True, season="thanksgiving",
+         best_mult=2.0, cost_secs=900, cost_min=300,
+         blurb="Gobbles happily. Blows a golden bubble now and then!"),
 ]
 for _s in SEASONAL_SPECIES:
     _s["tier"] = 0
@@ -656,7 +663,20 @@ TOYS = [
     dict(id="rainbowfall", name="Rainbow Waterfall", cost=3e+24, bonus=45, pay=17, desc="A waterfall in every colour."),
     dict(id="moonpool", name="Moon Pool", cost=3e+25, bonus=48, pay=18, desc="A glowing pool that reflects the moon."),
     dict(id="starcoral", name="Star Coral", cost=3e+26, bonus=52, pay=19, desc="Coral that twinkles like the night sky."),
-    dict(id="galaxyorb", name="Galaxy Orb", cost=3e+27, bonus=60, pay=22, desc="A swirling galaxy in a glass ball. The rarest toy of all."),
+    dict(id="galaxyorb", name="Galaxy Orb", cost=3e+27, bonus=60, pay=22, desc="A swirling galaxy in a glass ball."),
+    # ---------------- 1.8: for the climb to the Infinity Catfish
+    dict(id="piano", name="Sunken Piano", cost=3e+30, bonus=65, pay=24, desc="Plays itself when fish swim over the keys."),
+    dict(id="carousel", name="Sea Carousel", cost=3e+33, bonus=70, pay=26, desc="Little seahorses going round and round."),
+    dict(id="rocket", name="Toy Rocket", cost=3e+36, bonus=75, pay=28, desc="Bubbles out of its engines. Not going anywhere."),
+    dict(id="balloon", name="Hot Air Balloon", cost=3e+39, bonus=80, pay=30, desc="Floats on a string, very confused about water."),
+    dict(id="robot", name="Wind-up Robot", cost=3e+42, bonus=85, pay=32, desc="Waddles on the spot. Fish love it."),
+    dict(id="saucer", name="Flying Saucer", cost=3e+45, bonus=90, pay=34, desc="We come in peace. For the flakes."),
+    dict(id="dino", name="Toy Dinosaur", cost=3e+48, bonus=95, pay=36, desc="A tiny, terrifying rubber roar."),
+    dict(id="skycastle", name="Cloud Castle", cost=3e+51, bonus=100, pay=38, desc="A castle on a cloud, underwater, somehow."),
+    dict(id="comet", name="Captured Comet", cost=3e+54, bonus=110, pay=40, desc="Hums in its glass case, trailing sparks."),
+    dict(id="minisun", name="Tiny Sun", cost=3e+57, bonus=120, pay=42, desc="Warm, gentle, and only slightly dangerous."),
+    dict(id="pocketvoid", name="Pocket Black Hole", cost=3e+60, bonus=130, pay=44, desc="Don't drop anything near it."),
+    dict(id="infinitefount", name="Infinity Fountain", cost=3e+63, bonus=150, pay=48, desc="It never runs out. The rarest toy of all."),
 ]
 # seasonal toys: only for sale in their season (or again later, once you've owned one).
 # They cost cost_secs of your income (at least `cost`), so they're worth having at any stage.
@@ -669,6 +689,14 @@ SEASONAL_TOYS = [
          desc="A friendly old fish skeleton. Its jaw clacks when fish swim by."),
     dict(id="candycorn", name="Candy Corn Pile", cost=3000, cost_secs=200, bonus=5, pay=6, season="halloween",
          desc="Sweet treats on the sand. Fish nibble them and shed extra scales."),
+    dict(id="cornucopia", name="Cornucopia", cost=5000, cost_secs=300, bonus=6, pay=5, season="thanksgiving",
+         desc="A horn overflowing with fruit and veg."),
+    dict(id="haybale", name="Hay Bale", cost=3000, cost_secs=200, bonus=5, pay=4, season="thanksgiving",
+         desc="Fish like to rub their whiskers on it."),
+    dict(id="windupturkey", name="Wind-up Turkey", cost=8000, cost_secs=400, bonus=6, pay=6, season="thanksgiving",
+         desc="Waddles and bobs its head. Gobble gobble."),
+    dict(id="leafpile", name="Autumn Leaf Pile", cost=4000, cost_secs=250, bonus=5, pay=5, season="thanksgiving",
+         desc="Crunchy, colourful and perfect for hiding in."),
 ]
 TOYS += SEASONAL_TOYS
 TOY_LEVEL_GROWTH = 4.0
@@ -731,6 +759,19 @@ UPGRADES = [
          desc="+1% shiny chance and +100% visitor gifts per level."),
     dict(id="infinity", name="Infinity Tank", base=3e+23, growth=25.0, max=10,
          desc="Room for 2 more catfish per level, beyond the biggest tank."),
+    # ---------------- 1.8: more to chase after the Galaxy Catfish
+    dict(id="reefguard", name="Reef Guardian", base=1e+27, growth=10.0, max=20,
+         desc="A tiny guardian keeps the reef healthy. +25% scales per level."),
+    dict(id="moonbubble", name="Moon Bubbles", base=3e+30, growth=10.0, max=20,
+         desc="Pop-bubbles worth +25% more per level."),
+    dict(id="deepfeed", name="Deep Sea Feed", base=1e+33, growth=12.0, max=15,
+         desc="Fish gain XP much faster on their own."),
+    dict(id="starfilter", name="Star Filter", base=1e+36, growth=12.0, max=20,
+         desc="Filters water through actual starlight. +25% scales per level."),
+    dict(id="voidpump", name="Void Pump", base=1e+42, growth=12.0, max=15,
+         desc="Toys pay +50% more per level."),
+    dict(id="eternaltide", name="Eternal Tide", base=1e+50, growth=15.0, max=15,
+         desc="The tide never stops. +50% scales per level."),
 ]
 # seasonal upgrades: same rules as seasonal toys; cost = cost_secs of income (at least base) x growth per level
 UPGRADES += [
@@ -740,6 +781,12 @@ UPGRADES += [
          desc="Pop-bubbles and skull bubbles worth +40% per level."),
     dict(id="treats", name="Trick-or-Treat", base=30000, cost_secs=900, growth=4.0, max=5, season="halloween",
          desc="Visitors come 20% more often and bring +60% bigger gifts, per level."),
+    dict(id="harvestmoon", name="Harvest Moon", base=20000, cost_secs=600, growth=3.0, max=10, season="thanksgiving",
+         desc="A big orange moon lights the tank. +10% scales per level."),
+    dict(id="seconds", name="Second Helpings", base=10000, cost_secs=400, growth=3.0, max=10, season="thanksgiving",
+         desc="Feasts have +25% more bites per level."),
+    dict(id="gravy", name="Gravy Boat", base=30000, cost_secs=900, growth=4.0, max=5, season="thanksgiving",
+         desc="Everything's better with gravy: feasts come back 15% sooner per level."),
 ]
 UPGRADES_BY_ID = {u["id"]: u for u in UPGRADES}
 
@@ -791,6 +838,10 @@ THEMES = [
          plants=[(80, 200, 90), (110, 220, 110), (60, 170, 100), (140, 220, 90)],
          desc="The clearest water there is. You can see every pebble."),
     # seasonal: costs cost_secs of your income (at least cost); only for sale in its season, yours forever
+    dict(id="harvest", name="Harvest Cove", cost=5000, cost_secs=600, bonus=10, season="thanksgiving",
+         water=((214, 150, 84), (92, 52, 30)), sand=((206, 170, 110), (146, 110, 66)), rock=(100, 62, 36),
+         plants=[(196, 120, 40), (170, 70, 40), (210, 170, 60), (120, 110, 50)],
+         desc="Warm autumn water, hay bales and falling leaves. Every bubble you pop is worth a bit more."),
     dict(id="haunted", name="Haunted Lagoon", cost=5000, cost_secs=600, bonus=10, season="halloween",
          water=((88, 52, 120), (20, 10, 40)), sand=((96, 78, 70), (52, 42, 44)), rock=(46, 30, 66),
          plants=[(110, 60, 140), (230, 120, 30), (40, 70, 50), (150, 40, 60)],
@@ -836,6 +887,24 @@ LIGHTS = [  # (id, button name, tint colour, strength) - None = no tint
 LIGHTS_BY_ID = {x[0]: x for x in LIGHTS}
 VISIT_EVERY = (240, 480)
 HAUNTED_POP_MULT = 2         # pop-bubbles are skulls worth this much in the Haunted Lagoon
+HARVEST_POP_MULT = 1.5       # and worth this much in Harvest Cove
+
+# ---------------------------------------------------------------- limited-edition feasts
+# One big meal sinks to the sand and EVERY fish swims over to eat off it. Only while the holiday is on.
+# cost_secs = price in seconds of income; bites = how many bites it lasts; bite_secs = scales per bite,
+# in seconds of income; cooldown in seconds. full/happy/xp apply to the fish taking the bite.
+FEASTS = [
+    dict(id="pie", name="Pumpkin Pie", season="thanksgiving", cost_secs=120, min=500, bites=20, bite_secs=9,
+         cooldown=180, full=30, happy=25, xp=20, sink=7, color=(226, 130, 40),
+         desc="A whole pie, shared by the tank. Fish get happy and full."),
+    dict(id="platter", name="Harvest Platter", season="thanksgiving", cost_secs=300, min=2000, bites=30, bite_secs=13,
+         cooldown=360, full=35, happy=30, xp=40, sink=6, color=(200, 170, 70),
+         desc="Corn, squash and all the sides. Lots of XP for everyone."),
+    dict(id="roast", name="Whole Turkey", season="thanksgiving", cost_secs=900, min=10000, bites=45, bite_secs=26,
+         cooldown=900, full=60, happy=50, xp=90, sink=5, color=(170, 100, 50), buff=("double", 300),
+         desc="The big one! Sinks to the sand and everyone digs in. 2x scales for 5 minutes."),
+]
+FEASTS_BY_ID = {f["id"]: f for f in FEASTS}
 
 # ---------------------------------------------------------------- Fin Scratches ability (id 'rub')
 RUB_BASE = 2                 # seconds of scratching = RUB_BASE + level  (Lv 1 = 3s ... Lv 13 = 15s)
@@ -853,31 +922,55 @@ PEARL_BONUS = 0.10        # Golden Gills: +10% per level
 # Spend pearls from Spawning Season here. Level n of a node costs cost + grow * n pearls.
 # req = node that needs at least Lv 1 first. col/row = where it sits in the tree.
 PEARL_TREE = [
-    dict(id="gills", name="Golden Gills", max=10, cost=1, grow=1, req=None, col=0, row=0,
+    dict(id="gills", name="Gold Ring", max=10, cost=1, grow=1, req=None, col=0, row=0,
          desc="+10% scales per level"),
-    dict(id="playful", name="Playful Fish", max=5, cost=2, grow=1, req="gills", col=0, row=1,
+    dict(id="playful", name="Playful Ring", max=5, cost=2, grow=1, req="gills", col=0, row=1,
          desc="Toys pay +25% per level"),
-    dict(id="friends", name="Friendly Visitors", max=5, cost=2, grow=1, req="playful", col=0, row=2,
+    dict(id="friends", name="Friends Ring", max=5, cost=2, grow=1, req="playful", col=0, row=2,
          desc="More visitors, and +50% visitor gifts"),
-    dict(id="hatch", name="Quick Hatch", max=5, cost=1, grow=1, req=None, col=1, row=0,
+    dict(id="hatch", name="Quick Hatch Ring", max=5, cost=1, grow=1, req=None, col=1, row=0,
          desc="Eggs hatch 10% faster per level"),
-    dict(id="fertile", name="Fertile Eggs", max=5, cost=2, grow=1, req="hatch", col=1, row=1,
+    dict(id="fertile", name="Fertile Ring", max=5, cost=2, grow=1, req="hatch", col=1, row=1,
          desc="More baby catfish, fewer empty eggs"),
-    dict(id="brood", name="Big Broods", max=2, cost=4, grow=4, req="fertile", col=1, row=2,
+    dict(id="brood", name="Brood Ring", max=2, cost=4, grow=4, req="fertile", col=1, row=2,
          desc="+1 nest slot per level"),
-    dict(id="headstart", name="Head Start", max=5, cost=1, grow=1, req=None, col=2, row=0,
+    dict(id="headstart", name="Head Start Ring", max=5, cost=1, grow=1, req=None, col=2, row=0,
          desc="New seasons start with a bigger tank and scales"),
-    dict(id="keeptoys", name="Toy Box", max=1, cost=5, grow=0, req="headstart", col=2, row=1,
+    dict(id="keeptoys", name="Toy Box Ring", max=1, cost=5, grow=0, req="headstart", col=2, row=1,
          desc="Keep all your toys when you spawn"),
-    dict(id="seasoned", name="Seasoned Keeper", max=5, cost=3, grow=2, req="keeptoys", col=2, row=2,
+    dict(id="seasoned", name="Keeper Ring", max=5, cost=3, grow=2, req="keeptoys", col=2, row=2,
          desc="Seasons start with Filter +3/level"),
-    dict(id="shiny", name="Shiny Scales", max=5, cost=2, grow=1, req=None, col=3, row=0,
+    dict(id="shiny", name="Shiny Ring", max=5, cost=2, grow=1, req=None, col=3, row=0,
          desc="+1% shiny catfish chance per level"),
-    dict(id="lucky", name="Lucky Bubbles", max=5, cost=1, grow=1, req="shiny", col=3, row=1,
+    dict(id="lucky", name="Lucky Ring", max=5, cost=1, grow=1, req="shiny", col=3, row=1,
          desc="+1% golden bubbles, +25% bubble value"),
-    dict(id="deepjar", name="Bottomless Jar", max=5, cost=2, grow=1, req="lucky", col=3, row=2,
+    dict(id="deepjar", name="Jar Ring", max=5, cost=2, grow=1, req="lucky", col=3, row=2,
          desc="Jar holds +20 min, fills 10% faster"),
 ]
+PEARL_TREE += [  # newer rings, for keepers with plenty of paid bills behind them
+    dict(id="thrift", name="Thrift Ring", max=5, cost=6, grow=4, req="gills", col=0, row=3,
+         desc="Bills cost 10% less per level"),
+    dict(id="early", name="Early Bird Ring", max=3, cost=8, grow=8, req="hatch", col=1, row=3,
+         desc="+1 pearl per level for bills paid on time"),
+    dict(id="fishring", name="Fish Ring", max=10, cost=10, grow=6, req="headstart", col=2, row=3,
+         desc="Fish earn +50% per level"),
+    dict(id="bubblering", name="Bubble Ring", max=10, cost=10, grow=6, req="shiny", col=3, row=3,
+         desc="Pop-bubbles worth +50% per level"),
+    dict(id="crown", name="Crown Ring", max=5, cost=150, grow=150, req="fishring", col=2, row=4,
+         desc="Doubles ALL your scales, per level"),
+]
 PEARL_TREE_BY_ID = {n["id"]: n for n in PEARL_TREE}
+
+# ---------------------------------------------------------------- tank bills
+# Pay these (real scales!) to earn pearls, collected at your next Spawning Season.
+# Bill n costs BILL_BASE x BILL_GROWTH^n and is worth 1 + n // 4 pearls, so pearls grow gently
+# however rich you get. There's no penalty for being late: you only miss the early bonus.
+BILL_BASE = 1e13
+BILL_GROWTH = 6.0
+BILL_TIME = 1200              # seconds (while the game is open) to pay on time, once you can afford it
+BILL_NAMES = ["Water Bill", "Filter Rental", "Heater Power", "Sand Delivery", "Plant Food", "Vet Visit",
+              "Glass Cleaning", "Bubble Tax", "Tank Insurance", "Lighting Bill", "Pump Repair", "Fish School Fees",
+              "Whisker Trim", "Algae Removal", "Toy Repairs", "Reef Permit", "Scale Polish Bill", "River Tax",
+              "Ocean Rent", "Moon Tide Fee"]
 
 

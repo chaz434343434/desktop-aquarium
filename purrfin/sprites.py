@@ -145,6 +145,15 @@ def build_fish(sp, frame):
             for p in keys:
                 if body[p] != pat and (p[0] + p[1] * 2) % 7 < 2:
                     body[p] = lerp(body[p], (190, 90, 200), 0.45)
+    elif pattern == "turkey":
+        # dark feather stripes on the back, a pale chest and a red wattle by the head
+        for p in keys:
+            if vmap[p] < 0.6 and (p[0] + p[1]) % 3 == 0:
+                body[p] = pat
+            if tmap[p] > 0.86 and vmap[p] > 0.55:
+                body[p] = (214, 44, 44)
+            elif tmap[p] > 0.86 and vmap[p] < 0.3:
+                body[p] = (70, 110, 150)                  # blue-grey head, like a real turkey
     elif pattern == "pumpkin":
         # pumpkin ribs, and a carved grin that glows from inside
         for p in keys:
@@ -641,6 +650,130 @@ def draw_toy(surf, tid, cx, by, t=0.0, extra=0.0):
         D.line(surf, (220, 140, 120), (cx - 6, by - 1), (cx + 6, by - 7))
         D.line(surf, (255, 225, 210), (cx + 3, by - 6), (cx + 8, by - 3))
         surf.set_at((cx + 7, by - 8), (200, 120, 110))
+    elif tid == "piano":
+        D.rect(surf, (36, 26, 26), (cx - 9, by - 12, 18, 9))
+        D.rect(surf, (240, 240, 235), (cx - 9, by - 5, 18, 3))
+        for x in range(cx - 8, cx + 9, 3):
+            surf.set_at((x, by - 5), (30, 30, 30))
+        D.line(surf, (36, 26, 26), (cx - 8, by - 2), (cx - 8, by))
+        D.line(surf, (36, 26, 26), (cx + 8, by - 2), (cx + 8, by))
+        if int(t * 2) % 2:
+            surf.set_at((cx + 4, by - 15), (255, 240, 150))
+    elif tid == "carousel":
+        ang = t * 1.5
+        D.polygon(surf, (220, 70, 90), [(cx - 9, by - 15), (cx, by - 20), (cx + 9, by - 15)])
+        D.line(surf, (230, 200, 90), (cx, by - 15), (cx, by - 1))
+        D.rect(surf, (230, 200, 90), (cx - 8, by - 2, 16, 2))
+        for k in range(3):
+            a = ang + k * 2.09
+            hx = int(cx + math.cos(a) * 6)
+            D.line(surf, (200, 200, 210), (hx, by - 15), (hx, by - 4))
+            D.rect(surf, (130, 210, 220), (hx - 1, by - 7 + int(math.sin(a * 2)), 3, 3))
+    elif tid == "rocket":
+        D.rect(surf, (225, 225, 235), (cx - 3, by - 18, 7, 14))
+        D.polygon(surf, (220, 60, 60), [(cx - 3, by - 18), (cx, by - 23), (cx + 3, by - 18)])
+        D.polygon(surf, (220, 60, 60), [(cx - 3, by - 8), (cx - 6, by - 2), (cx - 3, by - 4)])
+        D.polygon(surf, (220, 60, 60), [(cx + 3, by - 8), (cx + 6, by - 2), (cx + 3, by - 4)])
+        D.circle(surf, (110, 190, 230), (cx, by - 13), 1)
+        surf.set_at((cx, by - 2), (255, 190, 60) if int(t * 6) % 2 else (255, 120, 40))
+    elif tid == "balloon":
+        bob = int(math.sin(t * 1.2) * 1.5)
+        D.circle(surf, (230, 90, 70), (cx, by - 19 + bob), 6)
+        D.line(surf, (250, 210, 90), (cx - 5, by - 19 + bob), (cx + 5, by - 19 + bob))
+        D.rect(surf, (140, 90, 50), (cx - 2, by - 9 + bob, 4, 3))
+        D.line(surf, (200, 200, 200), (cx, by - 6 + bob), (cx, by))
+    elif tid == "robot":
+        step = int(t * 3) % 2
+        D.rect(surf, (150, 160, 175), (cx - 4, by - 11, 9, 7))
+        D.rect(surf, (180, 190, 205), (cx - 3, by - 15, 7, 4))
+        surf.set_at((cx - 1, by - 14), (255, 80, 60))
+        surf.set_at((cx + 1, by - 14), (255, 80, 60))
+        D.line(surf, (120, 130, 145), (cx - 2, by - 4), (cx - 2, by - step))
+        D.line(surf, (120, 130, 145), (cx + 2, by - 4), (cx + 2, by - 1 + step))
+        surf.set_at((cx, by - 16), (250, 210, 90))
+    elif tid == "saucer":
+        bob = int(math.sin(t * 2) * 1.5)
+        D.ellipse(surf, (150, 165, 180), (cx - 10, by - 7 + bob, 20, 5))
+        D.circle(surf, (150, 230, 200), (cx, by - 8 + bob), 3)
+        for k in range(4):
+            surf.set_at((cx - 7 + k * 5, by - 4 + bob), (255, 230, 90) if (int(t * 4) + k) % 2 else (255, 110, 90))
+    elif tid == "dino":
+        g1 = (90, 170, 90)
+        D.ellipse(surf, g1, (cx - 7, by - 8, 13, 7))
+        D.rect(surf, g1, (cx + 3, by - 12, 3, 6))
+        D.rect(surf, g1, (cx + 3, by - 13, 6, 3))
+        surf.set_at((cx + 7, by - 12), (30, 30, 30))
+        D.polygon(surf, g1, [(cx - 7, by - 5), (cx - 12, by - 2), (cx - 6, by - 3)])
+        D.line(surf, g1, (cx - 4, by - 2), (cx - 4, by))
+        D.line(surf, g1, (cx + 2, by - 2), (cx + 2, by))
+        for k in range(3):
+            surf.set_at((cx - 5 + k * 3, by - 9), (230, 120, 60))
+    elif tid == "skycastle":
+        D.ellipse(surf, (240, 245, 250), (cx - 9, by - 7, 18, 7))
+        D.rect(surf, (200, 190, 230), (cx - 5, by - 16, 11, 10))
+        D.rect(surf, (200, 190, 230), (cx - 8, by - 19, 3, 13))
+        D.rect(surf, (200, 190, 230), (cx + 6, by - 19, 3, 13))
+        D.polygon(surf, (130, 110, 220), [(cx - 9, by - 19), (cx - 7, by - 23), (cx - 5, by - 19)])
+        D.polygon(surf, (130, 110, 220), [(cx + 5, by - 19), (cx + 7, by - 23), (cx + 9, by - 19)])
+        D.rect(surf, (90, 80, 130), (cx - 1, by - 11, 3, 4))
+    elif tid == "comet":
+        D.rect(surf, (90, 100, 120), (cx - 6, by - 2, 13, 2))
+        D.rect(surf, (170, 215, 240), (cx - 6, by - 14, 13, 12), 1)
+        cxx = int(cx + math.sin(t * 2) * 3)
+        D.circle(surf, (255, 240, 180), (cxx, by - 8), 2)
+        for k in range(1, 4):
+            surf.set_at((cxx - k * 2 if math.cos(t * 2) > 0 else cxx + k * 2, by - 8), (255, 170, 80))
+    elif tid == "minisun":
+        r = 5 + int(math.sin(t * 3) * 0.6 + 0.5)
+        D.circle(surf, (255, 170, 50), (cx, by - 8), r + 1)
+        D.circle(surf, (255, 225, 110), (cx, by - 8), r - 1)
+        for k in range(8):
+            a = t * 0.8 + k * 0.785
+            surf.set_at((int(cx + math.cos(a) * (r + 3)), int(by - 8 + math.sin(a) * (r + 3))), (255, 200, 80))
+    elif tid == "pocketvoid":
+        for k in range(10):
+            a = t * 1.8 + k * 0.63
+            rr = 4 + (k % 3) * 2
+            surf.set_at((int(cx + math.cos(a) * rr), int(by - 8 + math.sin(a) * rr * 0.6)), (200, 130, 255))
+        D.circle(surf, (8, 6, 14), (cx, by - 8), 3)
+    elif tid == "infinitefount":
+        D.rect(surf, (210, 200, 180), (cx - 7, by - 3, 15, 3))
+        D.rect(surf, (210, 200, 180), (cx - 1, by - 14, 3, 11))
+        for k in range(6):
+            ph = (t * 1.2 + k / 6) % 1
+            a = (-1 if k % 2 else 1) * ph * 7
+            surf.set_at((int(cx + a), int(by - 14 - math.sin(ph * 3.14) * 6 + ph * 10)),
+                        tuple(int(127 + 120 * math.sin(k + i * 2.1)) for i in range(3)))
+    elif tid == "cornucopia":
+        D.polygon(surf, (190, 140, 70), [(cx - 9, by - 1), (cx + 2, by - 9), (cx + 3, by)])
+        D.line(surf, (150, 105, 50), (cx - 5, by - 2), (cx + 1, by - 7))
+        D.circle(surf, (220, 60, 50), (cx + 5, by - 3), 2)
+        D.circle(surf, (240, 150, 50), (cx + 7, by - 6), 2)
+        D.rect(surf, (240, 210, 70), (cx + 3, by - 8, 2, 3))
+        surf.set_at((cx + 9, by - 2), (110, 60, 150))
+        surf.set_at((cx + 8, by - 1), (110, 60, 150))
+    elif tid == "haybale":
+        D.rect(surf, (214, 180, 90), (cx - 6, by - 7, 13, 7))
+        D.line(surf, (160, 125, 60), (cx - 3, by - 7), (cx - 3, by - 1))
+        D.line(surf, (160, 125, 60), (cx + 3, by - 7), (cx + 3, by - 1))
+        D.line(surf, (240, 212, 136), (cx - 6, by - 7), (cx + 6, by - 7))
+        surf.set_at((cx + 7, by - 8), (214, 180, 90))
+    elif tid == "windupturkey":
+        nod = int(t * 4) % 2
+        for k, col in enumerate(((200, 70, 40), (235, 150, 40), (240, 200, 70))):
+            D.circle(surf, col, (cx - 3, by - 7), 6 - k * 2)
+        D.ellipse(surf, (120, 76, 40), (cx - 4, by - 7, 9, 7))
+        D.rect(surf, (120, 76, 40), (cx + 3, by - 10 + nod, 2, 5))
+        surf.set_at((cx + 5, by - 10 + nod), (240, 180, 60))
+        surf.set_at((cx + 4, by - 8 + nod), (214, 44, 44))
+        D.line(surf, (230, 170, 60), (cx - 1, by - 1), (cx - 1, by))
+        D.line(surf, (230, 170, 60), (cx + 2, by - 1), (cx + 2, by))
+    elif tid == "leafpile":
+        pygame_rng = random.Random(5)
+        for k in range(26):
+            dx = pygame_rng.randint(-8, 8)
+            h = pygame_rng.randint(0, max(0, 4 - abs(dx) // 2))
+            surf.set_at((cx + dx, by - h), pygame_rng.choice(((214, 110, 40), (190, 70, 40), (230, 170, 60), (150, 80, 40))))
     elif tid == "jackolantern":
         D.ellipse(surf, (226, 116, 24), (cx - 7, by - 10, 14, 10))
         D.line(surf, (196, 96, 20), (cx - 2, by - 9), (cx - 2, by - 2))
@@ -858,7 +991,11 @@ def draw_toy(surf, tid, cx, by, t=0.0, extra=0.0):
                 surf.set_at((x, y), (200, 235, 255))
 
 
-TOY_SIZE = {"jackolantern": (16, 14), "cauldron": (18, 12), "skeleton": (24, 9), "candycorn": (14, 6),
+TOY_SIZE = {"piano": (20, 14), "carousel": (18, 20), "rocket": (12, 24), "balloon": (14, 26), "robot": (12, 16),
+            "saucer": (22, 12), "dino": (20, 14), "skycastle": (20, 26), "comet": (14, 16), "minisun": (16, 16),
+            "pocketvoid": (16, 16), "infinitefount": (18, 22), "cornucopia": (20, 12), "haybale": (14, 9),
+            "windupturkey": (14, 14), "leafpile": (18, 7),
+            "jackolantern": (16, 14), "cauldron": (18, 12), "skeleton": (24, 9), "candycorn": (14, 6),
             "ball": (8, 8), "airstone": (8, 5), "cave": (22, 14), "sunflower": (12, 24),
             "marimo": (10, 10), "chest": (14, 14), "hammock": (16, 18), "castle": (22, 24),
             "clam": (14, 10), "ship": (30, 26), "coral": (16, 20), "diver": (12, 26),
@@ -924,6 +1061,15 @@ UPGRADE_GLYPH = {
     "ghostglow": [" XXXX ", "XXXXXX", "X.XX.X", "XXXXXX", "XXXXXX", "X X X "],
     "spooky": [" XXX  ", "XXXXX ", "X.X.X ", "XXXXX ", " X X o", "    oo"],
     "treats": ["  X   ", " XXX  ", "XoXoX ", "XXXXX ", "XoXoX ", " XXX  "],
+    "harvestmoon": [" XXXX ", "XXooXX", "XooXXX", "XoXXXX", "XXXXXX", " XXXX "],
+    "seconds": ["XXXXXX", "XooooX", " XooX ", " XXXX ", "  XX  ", " XXXX "],
+    "gravy": ["   XX ", "XXXXoX", "XoooXX", "XoooX ", " XXX  ", "XXXXX "],
+    "reefguard": ["  X   ", "X X X ", "XXXXX ", "XoXoX ", " XXX  ", "  X   "],
+    "moonbubble": [" XXXX ", "Xo   X", "X o  X", "X    X", "X   oX", " XXXX "],
+    "deepfeed": ["  oo  ", " o  o ", "  XX  ", " XooX ", " XooX ", "XXXXXX"],
+    "starfilter": ["  X   ", "  X   ", "XXoXX ", " XXX  ", " X X  ", "X   X "],
+    "voidpump": [" XXXX ", "X....X", "X.oo.X", "X.oo.X", "X....X", " XXXX "],
+    "eternaltide": ["      ", " XX XX", "XoXXoX", "      ", " XX XX", "XoXXoX"],
 }
 UPGRADE_COL = {"tank": (120, 200, 255), "filter": (150, 160, 180), "hands": (250, 200, 170),
                "magnet": (230, 80, 80), "bubbler": (130, 210, 240), "heater": (240, 120, 60),
@@ -934,7 +1080,10 @@ UPGRADE_COL = {"tank": (120, 200, 255), "filter": (150, 160, 180), "hands": (250
                "current": (90, 170, 230), "timecrystal": (200, 140, 255), "bait": (230, 120, 90),
                "infinity": (255, 180, 230), "autonest": (200, 170, 250),
                "rub": (255, 170, 210), "ghostglow": (170, 250, 190), "spooky": (235, 232, 240),
-               "treats": (255, 160, 50)}
+               "treats": (255, 160, 50), "harvestmoon": (246, 176, 86), "seconds": (226, 200, 150),
+               "gravy": (170, 110, 60), "reefguard": (240, 130, 150), "moonbubble": (200, 215, 255),
+               "deepfeed": (90, 190, 170), "starfilter": (255, 235, 130), "voidpump": (140, 90, 220),
+               "eternaltide": (90, 210, 250)}
 
 
 def upgrade_icon(uid, scale=4):
@@ -1105,6 +1254,64 @@ def draw_visitor(surf, vid, x, y, right, t):
         pygame.draw.line(surf, (255, 215, 80), (x + 4 * d - 2, y + 2), (x + 4 * d + 2, y + 2))
         if step:
             surf.set_at((x + 3 * d, y - 8), (200, 235, 255))                    # air bubbles
+
+
+def draw_feast(surf, fid, x, y, frac, t):
+    """a limited-edition feast on the sand, getting smaller as it's eaten (frac = 1 full .. 0 gone)"""
+    x, y = int(x), int(y)
+    D = pygame.draw
+    D.ellipse(surf, (232, 232, 236), (x - 20, y - 4, 40, 7))                      # the big plate
+    D.ellipse(surf, (190, 195, 205), (x - 20, y - 4, 40, 7), 1)
+    if fid == "roast":
+        meat, shine, dark_ = (178, 108, 52), (214, 150, 84), (130, 74, 34)
+        if frac > 0.25:
+            w = 16 + int(frac * 14)
+            h = 10 + int(frac * 10)
+            top = y - 2 - h
+            D.ellipse(surf, dark_, (x - w // 2 - 1, top - 1, w + 2, h + 2))
+            D.ellipse(surf, meat, (x - w // 2, top, w, h))
+            D.ellipse(surf, shine, (x - w // 3, top + 2, w // 2, h // 3))
+            if frac > 0.5:                                                       # the drumsticks
+                for d in (-1, 1):
+                    D.line(surf, dark_, (x + d * (w // 2 - 2), y - 6), (x + d * (w // 2 + 4), y - 10), 5)
+                    D.line(surf, meat, (x + d * (w // 2 - 2), y - 6), (x + d * (w // 2 + 4), y - 10), 3)
+                    D.circle(surf, (245, 240, 225), (x + d * (w // 2 + 6), y - 11), 1)
+            else:                                                                # ribs showing through
+                for dx in range(-w // 3, w // 3 + 1, 3):
+                    D.line(surf, (235, 228, 210), (x + dx, top + 1), (x + dx, top + h // 2))
+        else:                                                                    # picked clean: just bones
+            for dx in (-7, -3, 1, 5):
+                D.line(surf, (235, 228, 210), (x + dx, y - 1), (x + dx + 1, y - 9))
+            D.line(surf, (235, 228, 210), (x - 9, y - 4), (x + 9, y - 4))
+    elif fid == "pie":
+        crust, fill, cream = (214, 164, 90), (226, 120, 40), (250, 245, 230)
+        slices = max(1, int(frac * 8 + 0.99))
+        cy = y - 5
+        for k in range(slices):
+            a0, a1 = k * 0.785, (k + 1) * 0.785
+            p0 = (x + int(math.cos(a0) * 16), cy + int(math.sin(a0) * 7))
+            p1 = (x + int(math.cos(a1) * 16), cy + int(math.sin(a1) * 7))
+            D.polygon(surf, fill, [(x, cy), p0, p1])
+            D.line(surf, crust, p0, p1, 2)
+        if frac > 0.6:
+            D.circle(surf, cream, (x, cy - 2), 3)
+    else:
+        items = max(1, int(frac * 12 + 0.99))
+        spots = [(-14, -3, (240, 200, 60)), (-8, -5, (220, 80, 50)), (-2, -7, (240, 150, 50)), (5, -6, (120, 170, 70)),
+                 (12, -4, (240, 200, 60)), (-11, -9, (170, 90, 170)), (-4, -12, (230, 180, 90)), (3, -12, (220, 80, 50)),
+                 (9, -9, (120, 170, 70)), (-1, -3, (240, 150, 50)), (15, -2, (170, 90, 170)), (-16, -2, (120, 170, 70))]
+        for dx, dy, col in spots[:items]:
+            D.circle(surf, col, (x + dx, y + dy), 3)
+            surf.set_at((x + dx - 1, y + dy - 1), (255, 245, 220))
+
+
+def feast_icon(fid):
+    key = ("feasticon", fid)
+    if key not in _cache:
+        s = pygame.Surface((46, 30), pygame.SRCALPHA)
+        draw_feast(s, fid, 23, 25, 1.0, 0.0)
+        _cache[key] = pygame.transform.scale(s, (74, 48))
+    return _cache[key]
 
 
 _scaled = {}

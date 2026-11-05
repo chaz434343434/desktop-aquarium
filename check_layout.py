@@ -7,7 +7,7 @@ import tempfile
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
-os.environ.setdefault("DA_DATE", "2026-10-22")
+os.environ.setdefault("DA_DATE", "2026-11-05")
 import pygame  # noqa: E402
 
 from purrfin import economy as E  # noqa: E402
@@ -67,7 +67,7 @@ def check_rows(g, where):
 
 for k in (1.0, 1.5, 2.0):
     g = setup(k)
-    for tab in ("fish", "toys", "upgrades", "hatchery", "themes", "mine", "spawn", "season:halloween"):
+    for tab in ("fish", "toys", "upgrades", "hatchery", "themes", "mine", "spawn", "season:halloween", "season:thanksgiving"):
         g.ui.panel, g.ui.tab = "shop", tab
         check_rows(g, f"[{int(k * 100)}%] Shop > {tab}")
     for p in ("dex", "settings"):

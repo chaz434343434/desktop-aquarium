@@ -12,7 +12,7 @@ from . import winutil
 from .data import (SPECIES, SPECIES_BY_ID, FOODS, FOODS_BY_ID, TOYS_BY_ID, UPGRADES_BY_ID, CLUTCHES_BY_ID,
                    MYSTERY_FROM_GOLDEN, MYSTERY_FROM_VISITOR,
                    THEMES_BY_ID, SEASONAL_BY_ID, SEASONS, SKULL_POP_MULT, HAUNTED_POP_MULT,
-                   RUB_COOLDOWN, RUB_EVERY, DIVER, EVENTS, EVENT_FIRST, EVENT_EVERY, CURIOUS_BONUS,
+                   RUB_COOLDOWN, RUB_EVERY, FEASTS_BY_ID, HARVEST_POP_MULT, DIVER, EVENTS, EVENT_FIRST, EVENT_EVERY, CURIOUS_BONUS,
                    TOY_MAX_LEVEL, TANK_NAMES, FISH_NAMES)
 from .sound import Sounds, Ambience
 from . import share
@@ -50,6 +50,7 @@ class Game:
         self.state = None
         self.last_backup = 0.0         # 0 = make a backup on the first save
         self.restored_from = None      # set if the save was damaged and a backup was loaded instead
+        self.migrated = None           # (old pearls, new pearls, ring levels) when an old save was converted
         if not fresh:
             self.state = self.load()
         self.toasts = []
@@ -66,6 +67,12 @@ class Game:
             i, ago = self.restored_from
             self.toast(f"Your save was damaged, so your backup from {E.fmt_time(max(0, ago))} ago was loaded.",
                        (255, 210, 150), 10)
+        if self.migrated:
+            old, new, lv = self.migrated
+            msg = "The Pearl Tree is now Rings, and you kept everything you bought!"
+            if old != new:
+                msg = f"The Pearl Tree is now Rings (you kept them all). Your {E.fmt(old)} old pearls became {new}."
+            self.toast(msg, (210, 190, 255), 12)
         self.monitor_override = monitor
         self.sounds = Sounds(self.state["settings"])
         self.ambience = Ambience(self.sounds)
@@ -131,6 +138,11 @@ class Game:
         if s.get("version", 1) < 2:          # v2: smaller default tank, currency is scales
             s["settings"]["width"] = 0.30
             s["version"] = 2
+        if s.get("version", 1) < 3:          # v3: Pearl Tree -> Rings + Tank Bills; old pearls could be trillions
+            old = s.get("pearls", 0)
+            s["pearls"] = E.exchange_old_pearls(old)
+            s["version"] = 3
+            self.migrated = (old, s["pearls"], sum(s.get("tree", {}).values()))
         s["fish"] = [f for f in s["fish"] if f.get("sp") in SPECIES_BY_ID]
         for f in s["fish"]:
             # fish renamed before name tags existed: any name that isn't a built-in default counts as named
@@ -358,6 +370,9 @@ class Game:
             self.grew_up(f)
         self.test_hooks(dt)
         self.tick_events(dt)
+        b = E.tick_bills(s, dt)
+        if b:
+            self.toast(f"A bill arrived: {b['name']}. Pay it in Shop > Bills to earn pearls!", (210, 190, 255), 6)
         self.ambience.tick()
         if self.searching and self.ui.panel != "shop":      # shop closed: stop typing
             self.stop_search()
@@ -615,7 +630,8 @@ class Game:
     def pop_mult(self, p):
         if p.skull:
             return SKULL_POP_MULT
-        return HAUNTED_POP_MULT if self.state.get("theme") == "haunted" else 1
+        th = self.state.get("theme")
+        return HAUNTED_POP_MULT if th == "haunted" else HARVEST_POP_MULT if th == "harvest" else 1
 
     def found_mystery(self, x, y):
         s = self.state
@@ -1251,6 +1267,59 @@ class Game:
             self.toast(f"{PEARL_TREE_BY_ID[nid]['name']} is now Lv {E.tlv(self.state, nid)}!", (230, 220, 255), 4)
             self.sounds.play("level", 0, self.now)
 
+    # ------------------------------------------------------------ tank bills
+    def pay_bill(self):
+        self.come_home()
+        got = E.pay_bill(self.state)
+        if not got:
+            return self.deny("Not enough scales for this bill yet.")
+        b, pearls = got
+        self.toast(f"{b['name']} paid! +{pearls} pearls at your next Spawning Season.", (210, 190, 255), 4)
+        self.sounds.play("buy", 0, self.now)
+        return got
+
+    def pay_all_bills(self):
+        self.come_home()
+        n = total = 0
+        while n < 500:
+            got = E.pay_bill(self.state)
+            if not got:
+                break
+            n += 1
+            total += got[1]
+        if not n:
+            return self.deny("Not enough scales for this bill yet.")
+        self.toast(f"Paid {n} bills! +{total} pearls at your next Spawning Season.", (210, 190, 255), 5)
+        self.sounds.play("level", 0, self.now)
+
+    # ------------------------------------------------------------ limited-edition feasts
+    def serve_feast(self, fid):
+        self.come_home()
+        s = self.state
+        f = FEASTS_BY_ID[fid]
+        if not E.in_season(f["season"]):
+            return self.deny(f"Only served at {SEASONS[f['season']]['name']}.")
+        if self.tank.feast:
+            return self.deny("Let them finish this one first!")
+        if self.now < self.food_cd.get(fid, 0):
+            return self.deny("The kitchen needs a little longer.")
+        if not E.spend(s, E.feast_cost(s, f)):
+            return self.deny("Not enough scales.")
+        self.food_cd[fid] = self.now + E.feast_cooldown(s, f)
+        self.tank.start_feast(f, E.feast_bites(s, f))
+        if f.get("buff"):
+            name, dur = f["buff"]
+            s["buffs"][name] = s["buffs"].get(name, 0) + dur
+        self.toast(f"{f['name']}! Everyone's coming to eat!", (255, 200, 120), 5)
+        self.sounds.play("golden", 0, self.now)
+
+    def feast_bite(self, actor, f):
+        """a fish takes a bite: it gets fed and sheds scales"""
+        self.fish_ate(actor, f)
+        val = max(1.0, E.income(self.state) * f["bite_secs"])
+        E.earn(self.state, val)
+        self.tank.float_text(actor.x, actor.y - 6, "+" + E.fmt(val), (255, 200, 120))
+
     def food_press(self, fid):
         """food button pressed: a quick click feeds like before, dragging lets you drop it where you want"""
         self.food_drag = [fid, None]
@@ -1294,10 +1363,11 @@ class Game:
         self.tank.state = self.state
         self.tank.foods.clear()
         self.tank.pops.clear()
+        self.tank.feast = None
         self.sounds.settings = self.state["settings"]
         self.tank.sync()
         self.save()
-        self.toast(f"Spawning Season! +{pearls} pearls. Spend them in Shop > Pearls.", (230, 220, 255), 8)
+        self.toast(f"Spawning Season! +{pearls} pearls. Spend them on Rings in Shop > Bills.", (230, 220, 255), 8)
         self.sounds.play("level", 0, self.now)
 
     def reset_save(self):
