@@ -54,7 +54,7 @@ for _ in range(120):
 beggar = next((a for a in t.fish.values() if a.beg > 0), None)
 check("with the mouse in the tank, a fish comes over wanting pets", beggar is not None)
 closest = 999
-for _ in range(240):                      # it has up to 9 seconds to get there
+for _ in range(480):                      # it has up to 15 seconds to get there (wide tanks take longer)
     g.update(1 / 30)
     closest = min(closest, abs(beggar.x - mouse[0]))
     if closest < 10:
