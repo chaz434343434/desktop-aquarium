@@ -68,7 +68,9 @@ def action():
     elif a < 0.43:
         g.ui.wheel(rand_pos(), rng.choice((-3, -1, 1, 3)))
     elif a < 0.50:
-        g.ui.panel = rng.choice(["shop", "shop", "dex", "settings", None])
+        g.ui.panel = rng.choice(["shop", "shop", "dex", "settings", "rings", None])
+        if g.ui.panel == "rings":
+            g.state["pearls"] += 20
         if g.ui.panel == "shop":
             g.ui.tab = rng.choice(TABS)
     elif a < 0.55:

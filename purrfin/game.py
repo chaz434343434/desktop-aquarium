@@ -27,6 +27,8 @@ AUTOSAVE_EVERY = 30          # seconds between saves while playing
 BACKUP_EVERY = 300           # every 5 minutes the save is also copied to a backup (3 kept)
 BACKUPS = 3
 WIN_H = 660
+HUD_W = 1000                 # Mac: the narrowest window that fits every button on the HUD
+HUD_W_OPEN = 1080            # Windows: the same, with a bit more room for buff timers
 STRIP_H = 30
 
 
@@ -93,6 +95,9 @@ class Game:
         self.last_input = 0.0
         self.input_earned = 0.0
         self.drag_toy = None
+        self.tank_move = None         # [grab x, grab y] inside the tank while it's being carried
+        self.tank_press = None        # desktop spot where empty water was pressed (may turn into a carry)
+        self.ui_below = False         # no room above the tank: panels and messages open below it
         self.drag_spot = None         # [key, start_x, moved] while holding the jar / nest
         self.mouse_low = None
         self.save_timer = AUTOSAVE_EVERY
@@ -194,7 +199,7 @@ class Game:
         self.event_t -= dt
         if self.event_t > 0:
             return
-        self.event_t = random.uniform(*EVENT_EVERY)
+        self.event_t = random.uniform(*EVENT_EVERY) / (1 + 0.1 * E.tlv(self.state, "curious"))
         self.start_event(random.choices([e for e, _ in EVENTS], weights=[w for _, w in EVENTS])[0])
 
     def start_event(self, kind):
@@ -248,55 +253,137 @@ class Game:
             return False
 
     # ------------------------------------------------------------ window
+    def tank_pos(self):
+        """where the player dropped the tank (its centre on the desktop), or None if it's docked at the bottom"""
+        p = self.state["settings"].get("tank_pos")
+        try:
+            return int(p[0]), int(p[1])
+        except (TypeError, ValueError, IndexError):
+            return None
+
     def layout(self):
         st = self.state["settings"]
         mons = winutil.monitors()
+        pos = self.tank_pos()
         idx = self.monitor_override if self.monitor_override is not None else st.get("monitor", -1)
+        if pos and self.monitor_override is None:
+            def away(mm):
+                dx = max(mm["x"] - pos[0], 0, pos[0] - mm["x"] - mm["w"] + 1)
+                dy = max(mm["y"] - pos[1], 0, pos[1] - mm["y"] - mm["h"] + 1)
+                return dx + dy
+            idx = min(range(len(mons)), key=lambda i: away(mons[i]))      # also copes with an unplugged monitor
         if idx is None or idx < 0 or idx >= len(mons):
             idx = 0
         m = mons[idx]
         self.mon = m
         self.S = int(st["scale"])
-        self.win_w = m["w"]
         ui_k = float(st.get("uiscale", 1.0))
-        self.win_h = min(int(WIN_H * max(1.0, ui_k)), m["h"])     # bigger UI needs a taller window
-        self.win_x = m["x"]
-        self.win_y = m["y"] + m["h"] - self.win_h
+        k = max(1.0, ui_k)
         tw = max(480, int(m["w"] * st["width"]))
         if self.compact:
             # Mac: the window can't be see-through, so the tank fills it edge to edge (no empty box
             # beside it). That means it's at least as wide as the row of buttons above it.
-            tw = max(tw, int(920 * max(1.0, ui_k)))        # every HUD button fits, Update! included
+            tw = max(tw, int(HUD_W * k))                   # every HUD button fits, Update! included
         tw = min(tw, m["w"]) // self.S * self.S
         th = TANK_H * self.S
-        if st["align"] == "left":
-            tx = 0
-        elif st["align"] == "center":
-            tx = (m["w"] - tw) // 2
+        hud = int((2 * STRIP_H + 12) * k)
+        # ---- where the tank is on the desktop
+        if pos:
+            tsx = max(m["x"], min(m["x"] + m["w"] - tw, pos[0] - tw // 2))
+            tsy = max(m["y"] + hud, min(m["y"] + m["h"] - th, pos[1] - th // 2))
         else:
-            tx = m["w"] - tw
-        if self.compact or self.minimized or not self.compact_tall:
-            k = max(1.0, ui_k)
-            if self.minimized:
-                self.win_h = min(self.win_h, int(50 * k))
-            elif not self.compact_tall and self.compact:   # Mac: just the tank and its two rows of buttons
-                self.win_h = min(self.win_h, th + int((2 * STRIP_H + 10) * k))
-            elif not self.compact_tall:            # tank + buttons + room for a few messages
-                self.win_h = min(self.win_h, th + int((2 * STRIP_H + 16 + 124) * k))
-            if self.compact:                       # exactly the tank's width, even with the shop open
-                self.win_w = min(m["w"], tw)
-            else:                                  # see-through anyway: just room for the HUD row
-                self.win_w = min(m["w"], max(tw, int(1000 * k)))
-            if st["align"] == "left":
-                wx = 0
-            elif st["align"] == "center":
-                wx = (m["w"] - self.win_w) // 2
+            tsx = m["x"] + {"left": 0, "center": (m["w"] - tw) // 2}.get(st["align"], m["w"] - tw)
+            tsy = m["y"] + m["h"] - th
+        # ---- how big the window around it needs to be
+        ui = getattr(self, "ui", None)
+        big = bool(ui and ui.panel == "rings") and not self.minimized        # the Ring Tree gets the whole screen
+        full = min(int(WIN_H * k), m["h"])
+        fits_exactly = self.minimized or (self.compact and not self.compact_tall)
+        if self.minimized:
+            total = min(full, int(50 * k))
+        elif big:
+            total = min(m["h"], int(840 * k)) if self.compact else m["h"]
+        elif not self.compact_tall and self.compact:       # Mac: just the tank and its two rows of buttons
+            total = min(full, th + int((2 * STRIP_H + 10) * k))
+        elif not self.compact_tall:                        # tank + buttons + room for a few messages
+            total = min(full, th + int((2 * STRIP_H + 16 + 124) * k))
+        else:
+            total = full
+        if self.compact:                                   # exactly the tank's width, even with the shop open
+            win_w = min(m["w"], tw)
+        elif self.minimized or not self.compact_tall:      # see-through anyway: just room for the HUD row
+            win_w = min(m["w"], max(tw, int(HUD_W_OPEN * k)))
+        else:
+            win_w = m["w"]
+        if not pos and st["align"] == "center":
+            win_x = m["x"] + (m["w"] - win_w) // 2
+        else:
+            win_x = max(m["x"], min(m["x"] + m["w"] - win_w, tsx + tw - win_w))
+        # ---- tank at the bottom of the window with everything above it, unless there's no room up there,
+        # then the panels and messages open below the tank instead
+        self.ui_below = False
+        if big:
+            win_y = max(m["y"], min(m["y"] + m["h"] - total, tsy + th - total))
+            ty = tsy - win_y
+        elif fits_exactly or total <= tsy - m["y"] + th:
+            win_y = tsy + th - total
+            ty = total - th
+        else:
+            room_up = tsy - m["y"] + th
+            room_down = m["y"] + m["h"] - (tsy - hud)
+            if room_down > room_up:
+                self.ui_below = True
+                total = min(total, room_down)
+                win_y = tsy - hud
+                ty = hud
             else:
-                wx = m["w"] - self.win_w
-            tx -= wx
-            self.win_x = m["x"] + wx
-            self.win_y = m["y"] + m["h"] - self.win_h
-        self.tank_rect = pygame.Rect(tx, self.win_h - th, tw, th)
+                total = room_up
+                win_y = m["y"]
+                ty = total - th
+        self.win_x, self.win_y, self.win_w, self.win_h = win_x, win_y, win_w, total
+        self.tank_rect = pygame.Rect(tsx - win_x, ty, tw, th)
+
+    # ------------------------------------------------------------ picking the tank up
+    def screen_mouse(self):
+        c = winutil.cursor_pos()
+        if c:
+            return c
+        p = pygame.mouse.get_pos()
+        return self.win_x + p[0], self.win_y + p[1]
+
+    def begin_tank_move(self):
+        if self.visiting or self.minimized:
+            return
+        self.ui.panel = None
+        self.ui.confirm = None
+        self.tank_press = None
+        c = self.screen_mouse()
+        self.tank_move = [c[0] - (self.win_x + self.tank_rect.x), c[1] - (self.win_y + self.tank_rect.y)]
+
+    def tick_tank_move(self):
+        """the window follows the mouse, every frame, until the button is let go"""
+        if not self.tank_move:
+            return
+        if not winutil.left_button_down():
+            return self.drop_tank()
+        c = self.screen_mouse()
+        r = self.tank_rect
+        mons = winutil.monitors()
+        hud = int((2 * STRIP_H + 12) * max(1.0, float(self.state["settings"].get("uiscale", 1.0))))
+        x = max(min(m["x"] for m in mons), min(max(m["x"] + m["w"] for m in mons) - r.w, c[0] - self.tank_move[0]))
+        y = max(min(m["y"] for m in mons) + hud, min(max(m["y"] + m["h"] for m in mons) - r.h, c[1] - self.tank_move[1]))
+        win_x, win_y = x - r.x, y - r.y
+        self.state["settings"]["tank_pos"] = [x + r.w // 2, y + r.h // 2]
+        if (win_x, win_y) != (self.win_x, self.win_y):
+            self.win_x, self.win_y = win_x, win_y
+            winutil.move(self.hwnd, win_x, win_y, self.win_w, self.win_h, self.state["settings"]["topmost"])
+
+    def drop_tank(self):
+        self.tank_move = None
+        self.relayout()                     # settle on whichever monitor it was dropped on
+        self.state["settings"]["monitor"] = winutil.monitors().index(self.mon) if self.mon in winutil.monitors() else -1
+        self.save()
+        self.sounds.play("plop", 0, self.now)
 
     def apply_window(self, first=False):
         st = self.state["settings"]
@@ -328,9 +415,12 @@ class Game:
         ui = self.ui
         tall = bool(ui.panel or self.renaming or ui.update_prompt or self.welcome or self.state.get("pending")) \
             and not self.visiting
-        if tall != self.compact_tall or self.minimized != getattr(self, "_was_min", False):
+        big = ui.panel == "rings"
+        if tall != self.compact_tall or self.minimized != getattr(self, "_was_min", False) \
+                or big != getattr(self, "_was_big", False):
             self.compact_tall = tall
             self._was_min = self.minimized
+            self._was_big = big
             self.relayout()
 
     def to_low(self, pos):
@@ -350,6 +440,7 @@ class Game:
     # ------------------------------------------------------------ tick
     def update(self, dt):
         self.now += dt
+        self.tick_tank_move()
         s = self.state
         s["stats"]["playtime"] += dt
         E.earn(s, E.income(s) * dt)
@@ -572,7 +663,7 @@ class Game:
             self.rub_t -= dt
             if self.rub_t <= 0:
                 if self.rub == "active":
-                    self.rub, self.rub_t = "cooldown", float(RUB_COOLDOWN)
+                    self.rub, self.rub_t = "cooldown", float(E.rub_cooldown(self.state))
                     self.toast("Your fish are happy and relaxed. Scratches recharge in a minute.", (255, 190, 220), 3)
                 else:
                     self.rub, self.rub_t = "ready", 0.0
@@ -667,6 +758,7 @@ class Game:
             return
         if button != 1:
             return
+        self.tank_press = None
         p = self.tank.pop_at(*low)
         if p:
             self.pop(p)
@@ -693,10 +785,16 @@ class Game:
         if t:
             self.drag_toy = t
             return
+        if self.rub not in ("armed", "active"):
+            self.tank_press = self.screen_mouse()       # empty water: dragging from here picks up the tank
 
     def mouse_up(self, pos, button):
         self.ui.drag = None
         self.ui.sb_drag = None
+        self.ui.rings.release()
+        self.tank_press = None
+        if self.tank_move:
+            self.drop_tank()
         if self.food_drag:
             fid, moved = self.food_drag
             self.food_drag = None
@@ -724,6 +822,24 @@ class Game:
         if self.ui.over_panel(pos) or self.to_low(pos):
             self.note_input()
         self.ui.set_mouse(pos)
+        if self.tank_move:
+            self.mouse_low = None
+            return
+        if self.tank_press:
+            c = self.screen_mouse()
+            if not buttons[0]:
+                self.tank_press = None
+            elif abs(c[0] - self.tank_press[0]) + abs(c[1] - self.tank_press[1]) >= 10:
+                return self.begin_tank_move()
+        if self.ui.rings.hold:
+            if buttons[0]:
+                self.ui.rings.drag_to(self.ui.ui_pos(pos))
+                self.mouse_low = None
+                return
+            self.ui.rings.release()
+        if self.ui.panel == "rings":
+            self.mouse_low = None
+            return
         if self.food_drag and buttons[0]:
             self.food_drag[1] = pos                # it's being dragged
             self.mouse_low = self.to_low(pos)
@@ -954,7 +1070,7 @@ class Game:
         if not v:
             return
         kind = v["v"]
-        amt = (max(25.0, E.income(self.state) * kind["secs"]) * (1 + 0.5 * E.tlv(self.state, "friends"))
+        amt = (max(25.0, E.income(self.state) * kind["secs"]) * (1 + 0.5 * E.tlv(self.state, "friends")) * (1 + 0.5 * E.tlv(self.state, "giftbag"))
                * (1 + E.ulv(self.state, "bait")) * (1 + 0.6 * E.ulv(self.state, "treats")))
         E.earn(self.state, amt)
         st = self.state["stats"]
@@ -1258,15 +1374,19 @@ class Game:
 
     # ------------------------------------------------------------ pearl tree
     def buy_tree(self, nid):
-        from .data import PEARL_TREE_BY_ID
+        from .data import PEARL_TREE, PEARL_TREE_BY_ID
         st = E.tree_state(self.state, nid)
         if st == "locked":
             n = PEARL_TREE_BY_ID[nid]
             return self.deny(f"Unlock {PEARL_TREE_BY_ID[n['req']]['name']} first.")
         if st == "poor":
             return self.deny("Not enough pearls. Spawn again to earn more!")
+        seen = {n["id"] for n in PEARL_TREE if E.tree_visible(self.state, n["id"])}
         if E.tree_buy(self.state, nid):
-            self.toast(f"{PEARL_TREE_BY_ID[nid]['name']} is now Lv {E.tlv(self.state, nid)}!", (230, 220, 255), 4)
+            new = [n["id"] for n in PEARL_TREE if E.tree_visible(self.state, n["id"]) and n["id"] not in seen]
+            self.ui.rings.bought(nid, new)
+            if new:
+                self.toast(f"You found {len(new)} new ring{'s' if len(new) > 1 else ''}!", (230, 220, 255), 4)
             self.sounds.play("level", 0, self.now)
 
     # ------------------------------------------------------------ tank bills
@@ -1357,6 +1477,7 @@ class Game:
         pearls = E.pearls_for(s)
         if pearls <= 0:
             return
+        pearls += 2 * E.tlv(s, "wish")
         keep = dict(s)
         keep["pearls"] = s["pearls"] + pearls
         keep["spawns"] = s["spawns"] + 1
@@ -1369,7 +1490,8 @@ class Game:
         self.sounds.settings = self.state["settings"]
         self.tank.sync()
         self.save()
-        self.toast(f"Spawning Season! +{pearls} pearls. Spend them on Rings in Shop > Bills.", (230, 220, 255), 8)
+        self.toast(f"Spawning Season! +{pearls} pearls to spend on the Ring Tree.", (230, 220, 255), 8)
+        self.ui.open_rings()
         self.sounds.play("level", 0, self.now)
 
     def reset_save(self):
@@ -1383,6 +1505,8 @@ class Game:
 
     def change_setting(self, key, value):
         self.state["settings"][key] = value
+        if key in ("align", "monitor"):
+            self.state["settings"]["tank_pos"] = None      # back to the bottom of the screen
         if key == "light":
             self.tank._tint_key = None
             self.tank.night_check = 0.0

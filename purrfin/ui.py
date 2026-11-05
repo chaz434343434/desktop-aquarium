@@ -3,6 +3,7 @@ import pygame
 
 from . import economy as E
 from . import sprites
+from .ringtree import RingTree
 from .pixfont import PixelFont
 from .version import VERSION
 from .data import SEASONAL_SPECIES, SEASONS, RUB_COOLDOWN, LIGHTS, FOODS_BY_ID, FEASTS
@@ -80,6 +81,8 @@ class UI:
         self.panel_rect = None
         self.content_h = 0
         self.view_h = 0
+        self.rings = RingTree(self)
+        self.tank_grip = None
 
     # ------------------------------------------------------------ helpers
     def box(self, scr, rect, col=BG, radius=7, border=BORDER, bevel=True):
@@ -176,6 +179,8 @@ class UI:
             if rect.collidepoint(pos):
                 cb()
                 return True
+        if self.panel == "rings" and self.rings.press(pos):
+            return True
         if self.grip_rect and self.grip_rect.collidepoint(pos) and self.panel_rect:
             self.drag = (pos[0] - self.panel_rect.x, pos[1] - self.panel_rect.y)
             return True
@@ -192,6 +197,8 @@ class UI:
 
     def wheel(self, pos, dy):
         pos = self.ui_pos(pos)
+        if self.panel == "rings" and self.panel_rect and self.panel_rect.collidepoint(pos):
+            return self.rings.wheel(dy)
         if self.panel_rect and self.panel_rect.collidepoint(pos):
             key = (self.panel, self.tab)
             mx = max(0, self.content_h - self.view_h)
@@ -201,6 +208,18 @@ class UI:
 
     def open(self, name):
         self.panel = None if self.panel == name else name
+        self.confirm = None
+
+    def open_rings(self):
+        if self.panel == "rings":
+            self.panel = None
+        else:
+            self.panel = "rings"
+            self.rings.opened()
+        self.confirm = None
+
+    def rings_to_bills(self):
+        self.panel, self.tab = "shop", "spawn"
         self.confirm = None
 
     def open_tab(self, t):
@@ -254,6 +273,7 @@ class UI:
             self.draw_tips(scr)
             return
         self.draw_strip(scr)
+        self.draw_tank_grip(scr)
         if s_pending(g):              # a hatchling has no room: this choice can't be skipped
             self.panel = "baby"
         elif self.panel == "baby":
@@ -273,6 +293,23 @@ class UI:
         self.draw_fish_tip(scr)
         self.draw_food_drag(scr)
         self.draw_tips(scr)
+
+    def draw_tank_grip(self, scr):
+        """a handle on top of the tank, there when the mouse is near. Dragging empty water works too."""
+        r = self.tank
+        grip = pygame.Rect(r.centerx - 34, r.y + 1, 68, 14)
+        self.tank_grip = grip
+        carrying = bool(self.g.tank_move)
+        if not carrying and not (self.mouse and r.inflate(0, 8).collidepoint(self.mouse)):
+            return
+        hot = carrying or grip.collidepoint(self.mouse)
+        scr.fill((120, 200, 240) if hot else (50, 70, 100), grip)
+        pygame.draw.rect(scr, (20, 30, 50), grip, 1)
+        for gx in range(grip.x + 8, grip.right - 8, 6):
+            for gy in (grip.y + 4, grip.y + 8):
+                scr.fill((16, 28, 48) if hot else (130, 160, 190), (gx, gy, 2, 2))
+        self.hits.append((grip, self.g.begin_tank_move))
+        self.tips.append((grip, ["Move the tank", "Hold and drag it anywhere", "(dragging empty water works too)"]))
 
     def draw_plaque(self, scr):
         """the tank's name on a little brass plaque on the front of the stand"""
@@ -391,7 +428,7 @@ class UI:
                f"All bonuses: x{E.global_mult(s):.2f}", f"Bubble power boosts fish: x{E.fmt(E.fish_boost(s))}",
                f"Lifetime: {E.fmt(s['earned_total'])}"]
         if s["pearls"]:
-            tip.append(f"Pearls: {s['pearls']} to spend (Shop > Bills)")
+            tip.append(f"Pearls: {s['pearls']} to spend (Rings button)")
         self.tips.append((pill, tip))
         x = pill.right + 8
         for fd in foods:
@@ -430,6 +467,8 @@ class UI:
                  ("Fishdex", lambda: self.open("dex"), None, NAV, None),
                  ("Shop", lambda: self.open_tab("fish"), None, GOOD, None),
                  ("My Tank", lambda: self.open_tab("mine"), None, NAV, ["My Tank", "Your fish: levels, names, selling"])]
+        if s["pearls"] or s.get("tree") or s["spawns"]:
+            specs.append(("Rings", self.open_rings, None, (120, 100, 190), ["Ring Tree", f"{s['pearls']} pearls to spend"]))
         if E.ulv(s, "hatchery"):
             specs.append(("Hatchery", lambda: self.open_tab("hatchery"), None, NAV, ["Hatchery", "Lay and hatch eggs"]))
         if g.updater.state in ("available", "downloading", "ready"):
@@ -500,7 +539,9 @@ class UI:
     def draw_toasts(self, scr):
         g = self.g
         inside = g.compact and not g.compact_tall      # Mac's short window: no room above, so over the water
-        y = self.tank.y + 8 if inside else self.hud_top() - 4
+        below = g.ui_below and not inside
+        inside = inside or below
+        y = self.tank.bottom + 4 if below else self.tank.y + 8 if inside else self.hud_top() - 4
         for text, col, t in reversed(g.toasts):
             img = self.f_norm.render(text, True, col)
             w = img.get_width() + 20
@@ -684,10 +725,26 @@ class UI:
     def draw_panel(self, scr):
         g = self.g
         r = self.tank
+        if self.panel == "rings":
+            self.hits, self.tips = [], []              # it covers the buttons: nothing under it can be clicked
+            self.sb = None
+            self.search_rect = None
+            if g.searching:
+                g.stop_search()
+            rr = pygame.Rect(0, 0, min(1240, self.W - 8), min(820, self.H - 8))
+            rr.midbottom = (r.centerx, self.H - 4)
+            rr.clamp_ip(scr.get_rect())
+            self.panel_rect = rr
+            self.rings.draw(scr, rr)
+            return
         w = min(800, self.W - 8)
-        bottom = self.hud_top() - 4
-        h = min(450, bottom - 6)
-        rr = pygame.Rect(max(4, r.right - w), bottom - h, w, h)
+        if g.ui_below:
+            top = r.bottom + 4
+            rr = pygame.Rect(max(4, r.right - w), top, w, min(450, self.H - top - 6))
+        else:
+            bottom = self.hud_top() - 4
+            h = min(450, bottom - 6)
+            rr = pygame.Rect(max(4, r.right - w), bottom - h, w, h)
         pp = g.state["settings"].get("panel_pos")
         if pp:
             rr.topleft = pp
@@ -704,6 +761,7 @@ class UI:
         self.tips.append((self.grip_rect, ["Drag to move", "Reset it in Options"]))
         if self.panel != "baby":
             self.button(scr, (rr.right - 40, rr.y + 8, 30, 30), "x", lambda: self.open(self.panel), col=BAD)
+        extra_rows = 0
         if self.panel == "shop":
             seasons = E.active_seasons(g.state)
             tabs = [("fish", "Catfish"), ("toys", "Toys"), ("upgrades", "Upgrades"), ("hatchery", "Hatchery"),
@@ -715,21 +773,27 @@ class UI:
             tabs += [("mine", "My Tank"), ("spawn", "Bills")]
             if (self.tab.startswith("season:") and self.tab[7:] not in seasons) or (self.tab == "past" and not past):
                 self.tab = "fish"                       # that holiday is over / nothing from past events
-            text_w = sum(self.f_norm.size(lab)[0] for _, lab in tabs)
             room = rr.w - 10 - 44                       # stop short of the close button
-            for pad, gap in ((22, 6), (14, 4), (10, 3), (7, 3), (5, 2)):
+            tab_font = self.f_norm
+            for tab_font, pad, gap in ((self.f_norm, 22, 6), (self.f_norm, 14, 4), (self.f_norm, 10, 3), (self.f_norm, 7, 3),
+                                       (self.f_norm, 5, 2), (self.f_small, 6, 2)):
+                text_w = sum(tab_font.size(lab)[0] for _, lab in tabs)
                 if text_w + pad * len(tabs) + gap * (len(tabs) - 1) <= room:
                     break
             x = rr.x + 10
+            tab_y = rr.y + 20
             for key, lab in tabs:
-                tw = self.f_norm.size(lab)[0] + pad
+                tw = tab_font.size(lab)[0] + pad
+                if x + tw > rr.x + 10 + room:           # small screen, big UI: carry on along a second row
+                    x = rr.x + 10
+                    tab_y += 32
                 if key.startswith("season:"):
                     col = (232, 120, 30) if self.tab == key else (150, 74, 20)
                 elif key == "past":
                     col = (140, 110, 210) if self.tab == key else (84, 66, 130)
                 else:
                     col = GOOD if self.tab == key else TAB
-                self.button(scr, (x, rr.y + 20, tw, 30), lab, lambda k=key: self.set_tab(k), col=col)
+                self.button(scr, (x, tab_y, tw, 30), lab, lambda k=key: self.set_tab(k), col=col, font=tab_font)
                 x += tw + gap
             if self.tab.startswith("season:"):
                 draw = self.tab_season
@@ -740,6 +804,7 @@ class UI:
                         "mine": self.tab_mine, "spawn": self.tab_spawn, "hatchery": self.tab_hatchery,
                         "themes": self.tab_themes}[self.tab]
             title = None
+            extra_rows = tab_y - (rr.y + 20)
         elif self.panel == "dex":
             draw, title = self.tab_dex, "Fishdex"
         else:
@@ -748,7 +813,8 @@ class UI:
             draw, title = self.tab_baby, "A baby catfish hatched!"
         if title:
             self.text(scr, title, self.f_big, ACC, (rr.x + 14, rr.y + 22))
-        view = pygame.Rect(rr.x + 6, rr.y + 58, rr.w - 12, rr.h - 64)
+        top = 58 + (extra_rows if self.panel == "shop" else 0)
+        view = pygame.Rect(rr.x + 6, rr.y + top, rr.w - 12, rr.h - top - 6)
         self.search_rect = None
         if self.panel == "shop" and (self.tab in ("fish", "toys", "upgrades", "themes", "past") or self.tab.startswith("season:")):
             self.draw_search(scr, pygame.Rect(view.x + 4, view.y, view.w - 16, 28))
@@ -1037,7 +1103,7 @@ class UI:
         if uid == "rub":
             if not l:
                 return "Not learned yet"
-            return f"Rub for {E.rub_secs(s)}s, then rest {RUB_COOLDOWN}s"
+            return f"Rub for {E.rub_secs(s)}s, then rest {E.rub_cooldown(s)}s"
         if uid == "autonest":
             return "On - eggs are re-laid for you" if l else "Off"
         if uid == "lucky":
@@ -1384,7 +1450,7 @@ class UI:
         g, s = self.g, self.g.state
         y0 = y
         lines = ("Pay your tank's bills to earn pearls. Then start a Spawning Season: release your tank into the "
-                 "river, collect the pearls and spend them on Rings, which last forever. You keep pearls, Rings, "
+                 "river, collect the pearls and spend them on the Ring Tree, which lasts forever. You keep pearls, Rings, "
                  "Fishdex, themes and shinies. Scales, fish, toys and upgrades reset.")
         for ln in self.wrap(lines, self.f_small, view.w - 30):
             self.text(scr, ln, self.f_small, TEXT, (view.x + 10, y))
@@ -1436,49 +1502,11 @@ class UI:
                         cb, col=BAD if conf else (120, 100, 190))
             y += 44
         y += 6
-        self.text(scr, "RINGS", self.f_big, ACC, (view.x + 10, y))
-        self.text(scr, "Yours forever, even after Spawning Season.", self.f_small, DIM, (view.x + 110, y + 8))
-        y += 34
-        return y - y0 + self.draw_tree(scr, view, y)
-
-    def draw_tree(self, scr, view, y):
-        g, s = self.g, self.g.state
-        cols = 4
-        cw = (view.w - 20) // cols
-        bw, bh, rh = cw - 14, 128, 150
-        boxes = {}
-        for n in PEARL_TREE:
-            boxes[n["id"]] = pygame.Rect(view.x + 6 + n["col"] * cw, y + n["row"] * rh, bw, bh)
-        # branches first so boxes sit on top
-        for n in PEARL_TREE:
-            if n["req"]:
-                a, b = boxes[n["req"]], boxes[n["id"]]
-                col = (200, 180, 255) if E.tlv(s, n["req"]) else (70, 70, 96)
-                scr.fill(col, (a.centerx - 2, a.bottom, 4, b.y - a.bottom))
-        for n in PEARL_TREE:
-            r = boxes[n["id"]]
-            st = E.tree_state(s, n["id"])
-            lv = E.tlv(s, n["id"])
-            fill = {"max": (70, 60, 110), "locked": (40, 42, 56)}.get(st, (56, 52, 92) if lv else BG2)
-            self.box(scr, r, fill)
-            tcol = DIM if st == "locked" else (ACC if lv else TEXT)
-            self.text(scr, n["name"], self.f_norm, tcol, (r.x + 8, r.y + 6))
-            self.text(scr, f"Lv {lv}/{n['max']}", self.f_small, (200, 180, 255), (r.x + 8, r.y + 26))
-            yy = r.y + 44
-            for ln in self.wrap(n["desc"], self.f_small, r.w - 16)[:3]:
-                self.text(scr, ln, self.f_small, DIM if st == "locked" else TEXT, (r.x + 8, yy))
-                yy += 15
-            if st == "max":
-                lab, ok = "MAX", False
-            elif st == "locked":
-                lab, ok = "Locked", False
-            else:
-                lab, ok = f"Buy ({E.tree_cost(s, n['id'])})", st == "ok"
-            self.button(scr, (r.x + 8, r.bottom - 32, r.w - 16, 26), lab, lambda i=n["id"]: g.buy_tree(i),
-                        enabled=ok, col=(120, 100, 190), font=self.f_small,
-                        tip=None if st != "locked" else ["Locked", f"Needs {PEARL_TREE_BY_ID[n['req']]['name']} first"])
-        rows = 1 + max(n["row"] for n in PEARL_TREE)
-        return rows * rh
+        found = sum(1 for n in PEARL_TREE if E.tree_visible(s, n["id"]))
+        self.button(scr, (view.x + 10, y, 300, 40), "Open the Ring Tree", self.open_rings, col=(120, 100, 190))
+        self.text(scr, f"Rings found: {found} of {len(PEARL_TREE)}", self.f_small, DIM, (view.x + 324, y + 13))
+        y += 50
+        return y - y0
 
     def tab_dex(self, scr, view, y):
         g, s = self.g, self.g.state
@@ -1552,7 +1580,8 @@ class UI:
         y += 36
         label("Position")
         for i, a in enumerate(("left", "center", "right")):
-            sb(X + i * 86, 80, a.title(), lambda a=a: g.change_setting("align", a), st["align"] == a)
+            sb(X + i * 86, 80, a.title(), lambda a=a: g.change_setting("align", a), st["align"] == a and not g.tank_pos())
+        self.text(scr, "or drag the tank anywhere", self.f_small, DIM, (X + 3 * 86 + 6, y + 8))
         y += 36
         label("Pixel size")
         for i, (lab, v) in enumerate((("Small", 2), ("Medium", 3), ("Large", 4))):

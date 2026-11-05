@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.8.1)
+DESKTOP AQUARIUM  (version 1.9.0)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -70,8 +70,10 @@ THE LONG GAME
   - Shop > Bills: pay your tank's bills to earn pearls. Each bill costs real scales and more
     than the last. Pay on time for a bonus pearl; being late never costs you anything.
   - When you're ready, start a Spawning Season: you lose your fish and upgrades, collect your
-    pearls, and spend them on Rings - bonuses that last forever (more scales, faster eggs, a
-    head start, cheaper bills and more).
+    pearls, and spend them on the Ring Tree (the Rings button). Its rings last forever.
+  - The Ring Tree has six branches growing out from the Spring. You can only see a ring once
+    you've bought the one before it, so buy one to find out where that branch goes. Drag to
+    look around, scroll to zoom, and click a ring to see what it does.
   - There are 100 catfish to collect, including the Blue Channel Catfish, drawn by a friend.
     Number 100 is the Infinity Catfish. Prices count up through names like Dc (decillion),
     Vg (vigintillion), Tg (trigintillion) all the way to Ce (centillion).
@@ -85,6 +87,8 @@ GOOD TO KNOW
   - Clicks on the empty space around the tank go straight through to whatever is behind it.
     (On a Mac the tank sits in its own small window instead, which grows while the shop is open.)
   - "Chill" pauses hunger and happiness if you just want to watch.
+  - Pick the tank up and put it anywhere: drag any empty water, or the handle that appears on
+    top of the tank. It works across monitors. Options > Position puts it back at the bottom.
   - Options lets you change the tank size, position, brightness, monitor, sound and more.
   - Text too small? Options > UI size makes all the buttons and text 150% or 200% bigger.
   - Computer lagging? Options > Performance > Battery saver makes the tank even lighter.

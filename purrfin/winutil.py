@@ -124,6 +124,30 @@ def move(hwnd, x, y, w, h, topmost=True):
                         SWP_NOACTIVATE | SWP_SHOWWINDOW)
 
 
+def cursor_pos():
+    """the mouse on the whole desktop, or None if we can't tell (then the game works it out from its window)"""
+    if IS_WIN:
+        p = wt.POINT()
+        return (p.x, p.y) if user32.GetCursorPos(ctypes.byref(p)) else None
+    if IS_MAC:
+        try:
+            from AppKit import NSEvent, NSScreen
+            loc = NSEvent.mouseLocation()
+            return int(loc.x), int(NSScreen.screens()[0].frame().size.height - loc.y)
+        except Exception:
+            return None
+    return None
+
+
+def left_button_down():
+    """is the left button still held? Asked directly, so a release outside the window still counts"""
+    if IS_WIN:
+        vk = 0x02 if user32.GetSystemMetrics(23) else 0x01       # 23 = the buttons are swapped
+        return bool(user32.GetAsyncKeyState(vk) & 0x8000)
+    import pygame
+    return bool(pygame.mouse.get_pressed()[0])
+
+
 def set_activatable(hwnd, on):
     """let the overlay take keyboard focus (for typing a fish name) or go back to never stealing it"""
     if not IS_WIN:

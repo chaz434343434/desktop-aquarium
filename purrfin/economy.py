@@ -8,7 +8,7 @@ import time
 from .data import (SPECIES, SPECIES_BY_ID, FOODS_BY_ID, TOYS, TOYS_BY_ID, UPGRADES_BY_ID, CLUTCHES_BY_ID,
                    THEMES_BY_ID, SHINY_CHANCE, PEARL_TREE_BY_ID, GOLDEN_EGG_SHINY,
                    TANK_CAPACITY, TOY_LEVEL_GROWTH, COPY_GROWTH, FISH_NAMES,
-                   PEARL_BONUS, SEASONS, SEASONAL_BY_ID, RUB_BASE, BILL_BASE, BILL_GROWTH, BILL_TIME, BILL_NAMES,
+                   PEARL_BONUS, SEASONS, SEASONAL_BY_ID, RUB_BASE, RUB_COOLDOWN, BILL_BASE, BILL_GROWTH, BILL_TIME, BILL_NAMES,
                    FEASTS)
 
 SAVE_VERSION = 3
@@ -17,7 +17,7 @@ SAVE_VERSION = 3
 def default_settings():
     return dict(width=0.30, align="right", scale=3, opacity=245, sound=True,
                 volume=0.5, topmost=True, monitor=-1, daynight=True, panel_pos=None, nametags=True, brightness=0,
-                autoupdate=True, uiscale=1.0, power="normal", light="auto", ambience="off")
+                autoupdate=True, uiscale=1.0, power="normal", light="auto", ambience="off", tank_pos=None)
 
 
 def new_state(keep=None):
@@ -38,12 +38,15 @@ def new_state(keep=None):
         hs = tlv(s, "headstart")
         if hs:
             s["upgrades"]["tank"] = hs
-            s["bubbles"] = 1000.0 * 20 ** (hs - 1)
+            s["bubbles"] = 1000.0 * 20 ** (hs - 1) * 10 ** tlv(s, "savings")
         if tlv(s, "seasoned"):
             s["upgrades"]["filter"] = 3 * tlv(s, "seasoned")
         if tlv(s, "keeptoys"):
             s["toys"] = {k: dict(v) for k, v in keep.get("toys", {}).items()}
     add_fish(s, "sunflower", name="Sunny", shiny=False)
+    for _ in range(tlv(s, "buddy")):
+        if len(s["fish"]) < capacity(s):
+            add_fish(s, "sunflower")
     return s
 
 
@@ -55,6 +58,12 @@ def tlv(s, nid):
 def tree_cost(s, nid):
     n = PEARL_TREE_BY_ID[nid]
     return n["cost"] + n["grow"] * tlv(s, nid)
+
+
+def tree_visible(s, nid):
+    """rings are a secret until you've bought the ring before them"""
+    n = PEARL_TREE_BY_ID[nid]
+    return not n["req"] or tlv(s, n["req"]) > 0 or tlv(s, nid) > 0
 
 
 def tree_state(s, nid):
@@ -186,7 +195,11 @@ def best_regular_rate(s):
 
 
 def rub_secs(s):
-    return RUB_BASE + ulv(s, "rub")
+    return RUB_BASE + ulv(s, "rub") + 2 * tlv(s, "longscratch")
+
+
+def rub_cooldown(s):
+    return max(20, RUB_COOLDOWN - 8 * tlv(s, "scratch"))
 
 
 def make_fish(s, sp_id, name=None, shiny=None):
@@ -216,7 +229,7 @@ def toy_lv(s, tid):
 
 
 def capacity(s):
-    return TANK_CAPACITY[ulv(s, "tank")] + 2 * ulv(s, "infinity")
+    return TANK_CAPACITY[ulv(s, "tank")] + 2 * ulv(s, "infinity") + tlv(s, "ocean")
 
 
 def owned_count(s, sp_id):
@@ -228,14 +241,14 @@ def species_cost(s, sp_id):
     sp = SPECIES_BY_ID[sp_id]
     if sp_id in SEASONAL_BY_ID:
         return max(sp["cost_min"], income(s) * sp["cost_secs"])
-    return sp["cost"] * COPY_GROWTH ** owned_count(s, sp_id)
+    return sp["cost"] * COPY_GROWTH ** owned_count(s, sp_id) * 0.97 ** tlv(s, "breeder")
 
 
 def upgrade_cost(s, uid):
     u = UPGRADES_BY_ID[uid]
     if u.get("cost_secs"):                       # seasonal: priced from your income, so useful at any stage
-        return max(u["base"], income(s) * u["cost_secs"]) * u["growth"] ** ulv(s, uid)
-    return u["base"] * u["growth"] ** ulv(s, uid)
+        return max(u["base"], income(s) * u["cost_secs"]) * u["growth"] ** ulv(s, uid) * 0.97 ** tlv(s, "hunter")
+    return u["base"] * u["growth"] ** ulv(s, uid) * 0.97 ** tlv(s, "hunter")
 
 
 def seasonal_ok(s, item):
@@ -252,15 +265,15 @@ def remember_seasonal(s, item):
 def toy_cost(s, tid):
     t = TOYS_BY_ID[tid]
     if t.get("cost_secs"):
-        return max(t["cost"], income(s) * t["cost_secs"]) * TOY_LEVEL_GROWTH ** toy_lv(s, tid)
-    return t["cost"] * TOY_LEVEL_GROWTH ** toy_lv(s, tid)
+        return max(t["cost"], income(s) * t["cost_secs"]) * TOY_LEVEL_GROWTH ** toy_lv(s, tid) * 0.96 ** tlv(s, "bargain")
+    return t["cost"] * TOY_LEVEL_GROWTH ** toy_lv(s, tid) * 0.96 ** tlv(s, "bargain")
 
 
 def food_cost(s, fid):
     f = FOODS_BY_ID[fid]
     if f["secs"] == 0:
         return 0
-    return max(f["min"], income(s) * f["secs"])
+    return max(f["min"], income(s) * f["secs"]) * 0.92 ** tlv(s, "snack")
 
 
 def rehome_refund(s, fish):
@@ -317,7 +330,7 @@ def tick_growth(s, dt):
 
 def fish_rate(s, f):
     sp = SPECIES_BY_ID[f["sp"]]
-    shiny = 2.0 if f.get("shiny") else 1.0
+    shiny = 2.0 * (1 + 0.2 * tlv(s, "shimmer")) if f.get("shiny") else 1.0
     young = 0.25 + 0.75 * growth(f)      # babies earn more as they grow
     base = sp["rate"] * sp["best_mult"] * best_regular_rate(s) if sp.get("season") else sp["rate"]
     return (base * level_mult(f["lv"]) * happy_mult(s, f["happy"]) * hunger_mult(f["full"]) * shiny
@@ -335,7 +348,7 @@ def global_mult(s):
     m *= 1 + 0.5 * ulv(s, "abyss")
     m *= 1 + 0.02 * len(s["fish"]) * ulv(s, "school")
     m *= 1 + toy_bonus(s)
-    m *= 1 + 0.03 * len(s["dex"])
+    m *= 1 + (0.03 + 0.01 * tlv(s, "stargazer")) * len(s["dex"])
     m *= 1 + sum(THEMES_BY_ID[t]["bonus"] for t in s.get("themes", []) if t in THEMES_BY_ID) / 100
     m *= 1 + PEARL_BONUS * tlv(s, "gills")
     m *= 1 + 0.10 * ulv(s, "ghostglow")
@@ -413,7 +426,7 @@ def pop_interval(s):
         t /= 4
     if "storm" in s["buffs"]:             # surprise event: bubble storm
         t /= 5
-    return t
+    return t * 0.96 ** tlv(s, "froth")
 
 
 def golden_chance(s):
@@ -460,7 +473,7 @@ def hatch_speed(s):
 
 
 def hatch_bonus(s):
-    return 1 + 0.1 * max(0, ulv(s, "hatchery") - 1)
+    return (1 + 0.1 * max(0, ulv(s, "hatchery") - 1)) * (1 + 0.2 * tlv(s, "nursery"))
 
 
 def clutch_time(s, cid):
@@ -590,7 +603,7 @@ def hatch(s, egg):
         if sp:
             shiny = None
             if egg["c"] == "golden":       # Golden Eggs: much better shiny odds
-                shiny = random.random() < min(0.5, shiny_chance(s) * GOLDEN_EGG_SHINY)
+                shiny = random.random() < min(0.5, shiny_chance(s) * GOLDEN_EGG_SHINY * (1 + 0.25 * tlv(s, "yolk")))
             baby = add_baby(s, sp, shiny=shiny)
     return dict(amt=amt, empty=False, baby=baby)
 
@@ -608,7 +621,7 @@ def sell_value(s, f):
 
 
 def hands_mult(s):
-    return 1 + 0.3 * ulv(s, "hands")
+    return (1 + 0.3 * ulv(s, "hands")) * (1 + 0.25 * tlv(s, "gentle"))
 
 
 def pet_reward(s, f):
@@ -616,7 +629,7 @@ def pet_reward(s, f):
 
 
 def drain_mult(s):
-    return 0.88 ** ulv(s, "heater")
+    return 0.88 ** ulv(s, "heater") * 0.92 ** tlv(s, "tender")
 
 
 FULL_DRAIN = 100 / 1800     # empty in 30 min
@@ -637,12 +650,12 @@ def toy_play_value(s, f, tid):
 
 
 def passive_xp(s):
-    return 0.06 * ulv(s, "light") + 0.5 * ulv(s, "deepfeed")
+    return 0.06 * ulv(s, "light") + 0.5 * ulv(s, "deepfeed") + 0.25 * tlv(s, "growth")
 
 
 def offline_terms(s):
-    pct = 0.2 + 0.1 * ulv(s, "care")
-    hours = min(12, 2 + 1.25 * ulv(s, "care"))
+    pct = 0.2 + 0.1 * ulv(s, "care") + 0.1 * tlv(s, "overflow")
+    hours = min(12, 2 + 1.25 * ulv(s, "care")) + 2 * tlv(s, "overflow")
     return pct, hours
 
 
@@ -661,7 +674,8 @@ def bill_info(s, n=None):
         cost = BILL_BASE * BILL_GROWTH ** n * 0.9 ** tlv(s, "thrift")
     except OverflowError:
         cost = float("inf")
-    return dict(name=name, cost=cost, pearls=1 + n // 4, bonus=1 + tlv(s, "early"))
+    return dict(name=name, cost=cost, pearls=1 + n // 4 + tlv(s, "pearldiver"),
+                bonus=1 + tlv(s, "early") + tlv(s, "prompt"))
 
 
 def tick_bills(s, dt):
@@ -670,7 +684,7 @@ def tick_bills(s, dt):
     b = bill_info(s)
     if s.get("bill_due") is None:
         if s["bubbles"] >= b["cost"]:
-            s["bill_due"] = float(BILL_TIME)
+            s["bill_due"] = float(BILL_TIME + 300 * tlv(s, "grace"))
             return b
         return None
     s["bill_due"] = max(0.0, s["bill_due"] - dt)
@@ -701,7 +715,7 @@ def feast_cost(s, f):
 
 
 def feast_cooldown(s, f):
-    return f["cooldown"] * 0.85 ** ulv(s, "gravy")
+    return f["cooldown"] * 0.85 ** ulv(s, "gravy") * 0.9 ** tlv(s, "pantry")
 
 
 def feast_bites(s, f):

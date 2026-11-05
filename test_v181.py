@@ -97,7 +97,7 @@ for k in (1.0, 1.5, 2.0):
     g.apply_window()
     rects = {}
     orig_button = g.ui.button
-    g.ui.button = lambda scr, rect, label, *a, **kw: rects.setdefault(label, pygame.Rect(rect)) and orig_button(scr, rect, label, *a, **kw)
+    g.ui.button = lambda scr, rect, label, *a, **kw: rects.__setitem__(label, pygame.Rect(rect)) or orig_button(scr, rect, label, *a, **kw)
     g.ui.panel, g.ui.tab = "shop", "past"
     g.draw()
     g.ui.button = orig_button
