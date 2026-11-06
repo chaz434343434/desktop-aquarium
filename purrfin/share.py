@@ -3,6 +3,7 @@ Only what you can see is in it (fish, toys, theme, name). Codes from other peopl
 strictly before use: unknown fish/toys are dropped and everything is size-limited."""
 import base64
 import json
+import re
 import zlib
 
 from . import economy as E
@@ -13,6 +14,7 @@ MAX_FISH = 80
 MAX_NAME = 22
 MAX_FRIENDS = 30
 MAX_CODE = 20000
+ONLINE_ID = re.compile(r"^[1-9][0-9]{5}$")
 
 
 def encode(s):
@@ -84,9 +86,16 @@ def clean_friends(s):
         if not (isinstance(f, dict) and isinstance(f.get("code"), str) and f["code"].startswith(PREFIX)
                 and len(f["code"]) <= MAX_CODE + len(PREFIX)):
             continue
-        good.append(dict(name=_clean_name(f.get("name", "")) or "Friend", tank=_clean_name(f.get("tank", "")),
-                         code=f["code"], fish=_int(f.get("fish"), 0, MAX_FISH, 0), saved=_int(f.get("saved"), 0, 2 ** 40, 0)))
+        one = dict(name=_clean_name(f.get("name", "")) or "Friend", tank=_clean_name(f.get("tank", "")),
+                   code=f["code"], fish=_int(f.get("fish"), 0, MAX_FISH, 0), saved=_int(f.get("saved"), 0, 2 ** 40, 0))
+        if isinstance(f.get("id"), str) and ONLINE_ID.match(f["id"]):
+            one["id"] = f["id"]
+        good.append(one)
     s["friends"] = good[:MAX_FRIENDS]
+    me = s.get("online")
+    if not (isinstance(me, dict) and isinstance(me.get("id"), str) and ONLINE_ID.match(me["id"])
+            and isinstance(me.get("key"), str) and re.fullmatch("[0-9a-f]{64}", me["key"])):
+        s["online"] = None
 
 
 def decode(text, settings):

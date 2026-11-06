@@ -24,6 +24,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 
+from .online import ssl_context
 from .version import VERSION, UPDATE_REPO
 
 EXE_NAME = "DesktopAquarium.exe"
@@ -109,7 +110,7 @@ class Updater:
         try:
             req = urllib.request.Request(API, headers={"User-Agent": "DesktopAquarium",
                                                        "Accept": "application/vnd.github+json"})
-            with urllib.request.urlopen(req, timeout=15) as r:
+            with urllib.request.urlopen(req, timeout=15, context=ssl_context()) as r:
                 data = json.loads(r.read().decode("utf-8"))
             tag = data.get("tag_name", "")
             asset = pick_asset(data.get("assets", []))
@@ -146,7 +147,7 @@ class Updater:
             tmp = tempfile.mkdtemp(prefix="DesktopAquariumUpdate_")
             zpath = os.path.join(tmp, "update.dmg" if IS_MAC else "update.zip")
             req = urllib.request.Request(self.latest["url"], headers={"User-Agent": "DesktopAquarium"})
-            with urllib.request.urlopen(req, timeout=60) as r, open(zpath, "wb") as out:
+            with urllib.request.urlopen(req, timeout=60, context=ssl_context()) as r, open(zpath, "wb") as out:
                 total = int(r.headers.get("Content-Length") or self.latest.get("size") or 0)
                 got = 0
                 while True:

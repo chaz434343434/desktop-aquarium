@@ -1,0 +1,7 @@
+{
+  "name": "desktop-aquarium-server",
+  "private": true,
+  "devDependencies": {
+    "wrangler": "^4.36.0"
+  }
+}

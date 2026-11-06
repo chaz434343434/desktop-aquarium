@@ -6,3 +6,5 @@ out/
 release/
 test_save.json
 *.spec
+node_modules/
+.wrangler/

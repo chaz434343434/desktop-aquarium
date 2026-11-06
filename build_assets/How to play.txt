@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.11.0)
+DESKTOP AQUARIUM  (version 1.12.0)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -28,11 +28,16 @@ MAKE IT YOURS (Shop > My Tank)
   - Name your tank: the name goes on a little plaque on the front.
   - Lights: keep the real day & night clock, or pick Moonlight, Sunset, Glow, Purple, Deep sea.
   - Take photo: saves a picture in your Pictures folder (Desktop Aquarium).
-  - Copy tank code: send it to a friend. They copy it and press Visit a tank to look at
-    your tank (just looking - it doesn't change anything in their game).
-  - While visiting, press Save friend to keep that tank under Shop > My Tank, so you can visit
-    it again without the code. It shows the tank as it was when the code was copied. When they
-    send a newer code, copy it and press New code next to their name.
+  - Share my tank gives you a 6-digit code. Friends press Type a code and enter it to look at
+    your tank (just looking - it doesn't change anything in their game). Sharing puts your fish,
+    their names, toys, theme and tank name on the game's server, where anyone with the code can
+    see them. Stop sharing deletes them. Nothing is sent unless you press Share.
+  - While visiting, press Save friend to keep that tank under Shop > My Tank. Friends with a
+    6-digit code always show their latest tank. Report is for a rude name or anything else that
+    shouldn't be there.
+  - If your network blocks the server, Copy tank code still works: send the long code to a friend,
+    and they copy it and press Visit a tank. Those show the tank from when the code was copied.
+    When they send a newer one, copy it and press New code next to their name.
   - Options > Calm sounds: soft water, or water + gentle music.
 
 SURPRISES

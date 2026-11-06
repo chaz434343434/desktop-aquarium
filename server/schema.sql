@@ -1,0 +1,19 @@
+CREATE TABLE IF NOT EXISTS tanks (
+  id TEXT PRIMARY KEY,
+  code TEXT NOT NULL,
+  key_hash TEXT NOT NULL,
+  updated INTEGER NOT NULL,
+  hidden INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS tanks_updated ON tanks (updated);
+CREATE TABLE IF NOT EXISTS reports (
+  tank TEXT NOT NULL,
+  who TEXT NOT NULL,
+  PRIMARY KEY (tank, who)
+);
+CREATE TABLE IF NOT EXISTS limits (
+  who TEXT NOT NULL,
+  hour INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  PRIMARY KEY (who, hour)
+);

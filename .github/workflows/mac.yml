@@ -32,7 +32,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install build tools
-        run: pip install pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow
+        run: pip install pygame==2.6.1 pyinstaller pyobjc-framework-Cocoa pillow certifi
 
       - name: Game tests (no window)
         env:

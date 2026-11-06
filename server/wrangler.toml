@@ -1,0 +1,33 @@
+name = "desktop-aquarium"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "desktop-aquarium"
+database_id = "f756e7be-4393-4e12-8b3a-17c53f950342"
+
+[triggers]
+crons = ["0 4 * * SUN"]  # Sundays: clear out tanks nobody has updated for a year
+
+# one IP address, per minute
+[[ratelimits]]
+name = "LIMIT_READ"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
+[[ratelimits]]
+name = "LIMIT_WRITE"
+namespace_id = "1002"
+  [ratelimits.simple]
+  limit = 20
+  period = 60
+
+[[ratelimits]]
+name = "LIMIT_CREATE"
+namespace_id = "1003"
+  [ratelimits.simple]
+  limit = 5
+  period = 60

@@ -2,6 +2,7 @@
 import json
 import os
 import random
+import re
 import sys
 import time
 
@@ -16,6 +17,8 @@ from .data import (SPECIES, SPECIES_BY_ID, FOODS, FOODS_BY_ID, TOYS_BY_ID, UPGRA
                    TOY_MAX_LEVEL, TANK_NAMES, FISH_NAMES)
 from .sound import Sounds, Ambience
 from . import share
+from .online import Online
+from .online import ID as ONLINE_ID
 from .pngsave import save_png
 from .updater import Updater
 from .version import VERSION
@@ -23,6 +26,7 @@ from .tank import Tank, TANK_H
 from .ui import UI
 
 KEY = (255, 0, 255)          # transparent colour key - never used in art
+SYNC_EVERY = 300             # seconds between checks that your shared tank is up to date
 AUTOSAVE_EVERY = 30          # seconds between saves while playing
 BACKUP_EVERY = 300           # every 5 minutes the save is also copied to a backup (3 kept)
 BACKUPS = 3
@@ -90,6 +94,9 @@ class Game:
         self.food_drag = None     # [food id, screen pos] while dragging a food from its button
         self.visiting = None      # a friend's tank (state dict) while visiting it
         self.visit_code = None    # the code of the tank being visited
+        self.visit_id = None      # its 6-digit code, if it came from the server
+        self.online = Online()
+        self.sync_t = 20.0        # seconds until we next check whether your shared tank has changed
         self.my_tank = None
         self.rename_text = ""
         self.prev_fg = None
@@ -447,6 +454,7 @@ class Game:
     def update(self, dt):
         self.now += dt
         self.tick_tank_move()
+        self.tick_online(dt)
         s = self.state
         s["stats"]["playtime"] += dt
         E.earn(s, E.income(s) * dt)
@@ -1130,16 +1138,129 @@ class Game:
         return code
 
     def visit_from_clipboard(self):
-        return self.visit(winutil.get_clipboard())
+        text = winutil.get_clipboard()
+        if ONLINE_ID.match((text or "").strip()):
+            return self.visit_online(text.strip())
+        return self.visit(text)
 
-    def visit(self, text):
+    # ---- the tank server. Nothing is sent until you press Share.
+    def tick_online(self, dt):
+        for r in self.online.poll():
+            getattr(self, "online_" + r["kind"])(r)
+        me = self.state.get("online")
+        if not me:
+            return
+        self.sync_t -= dt
+        if self.sync_t <= 0:
+            self.sync_t = SYNC_EVERY
+            code = share.encode(self.state)
+            if code != me.get("sent"):
+                self.online.send("sync", "PUT", f"/v1/tanks/{me['id']}", dict(code=code), me["key"], ctx=code)
+
+    def copy_short_code(self):
+        me = self.state.get("online")
+        if me and winutil.set_clipboard(me["id"]):
+            self.toast(f"Copied {me['id']}!", (150, 230, 160), 3)
+
+    def share_tank(self):
+        if self.state.get("online") or not self.online.enabled:
+            return
+        code = share.encode(self.state)
+        if self.online.send("share", "POST", "/v1/tanks", dict(code=code), ctx=code):
+            self.toast("Sharing your tank...", (200, 220, 255), 3)
+
+    def online_share(self, r):
+        d = r["data"] or {}
+        tid, key = d.get("id"), d.get("key")
+        if r["status"] == "busy":
+            return self.deny("Too many tries. Wait a minute, then try again.")
+        if r["status"] != "ok" or not (isinstance(tid, str) and ONLINE_ID.match(tid) and isinstance(key, str)
+                                       and re.fullmatch("[0-9a-f]{64}", key)):
+            return self.deny("Couldn't reach the tank server. Try again in a bit.")
+        self.state["online"] = dict(id=tid, key=key, sent=r["ctx"])
+        self.sync_t = SYNC_EVERY
+        self.save()
+        self.toast(f"Your tank code is {tid}!", (150, 230, 160), 8)
+        self.sounds.play("level", 0, self.now)
+
+    def online_sync(self, r):
+        me = self.state.get("online")
+        if not me:
+            return
+        if r["status"] == "ok":
+            me["sent"] = r["ctx"]
+        elif r["status"] in ("notfound", "denied"):
+            self.state["online"] = None
+            self.toast("Your shared tank is no longer on the server. Press Share my tank for a new code.", (255, 190, 140), 8)
+
+    def stop_sharing(self):
+        me = self.state.get("online")
+        if me and self.online.send("stop", "DELETE", f"/v1/tanks/{me['id']}", key=me["key"]):
+            self.toast("Taking your tank off the server...", (200, 220, 255), 3)
+
+    def online_stop(self, r):
+        if r["status"] in ("ok", "notfound", "denied"):
+            self.state["online"] = None
+            self.save()
+            self.toast("Your tank isn't shared any more.", (200, 200, 230), 4)
+        else:
+            self.deny("Couldn't reach the tank server, so your tank is still shared. Try again in a bit.")
+
+    def start_code_entry(self):
+        if not self.online.enabled:
+            return
+        self.start_rename({"_code": True, "name": "", "named": False})
+
+    def visit_online(self, tid, friend=None):
+        if not self.online.enabled:
+            return self.deny("The tank server isn't available.")
+        if self.online.send("lookup", "GET", f"/v1/tanks/{tid}", ctx=dict(id=tid, friend=friend)):
+            self.toast(f"Looking for tank {tid}...", (200, 220, 255), 2)
+
+    def online_lookup(self, r):
+        tid, friend = r["ctx"]["id"], r["ctx"]["friend"]
+        code = (r["data"] or {}).get("code")
+        vs = None
+        if r["status"] == "ok" and isinstance(code, str):
+            vs = self.visit(code, quiet=True, tid=tid)
+            if vs and friend is not None:
+                friend.update(code=self.visit_code, fish=len(vs["fish"]), tank=vs["tank_name"], saved=int(time.time()))
+        if vs:
+            return
+        if friend is not None:                        # no luck: show the copy we kept
+            why = ("is no longer shared" if r["status"] == "notfound" else "couldn't be reached")
+            self.visit(friend["code"], quiet=True)
+            return self.toast(f"{friend['name']}'s tank {why}, so this is the copy you saved.", (255, 190, 140), 6)
+        if r["status"] == "notfound":
+            return self.deny(f"There's no tank with the code {tid}.")
+        if r["status"] == "busy":
+            return self.deny("Too many tries. Wait a minute, then try again.")
+        self.deny("Couldn't reach the tank server. Try again in a bit.")
+
+    def report_tank(self):
+        if not self.visit_id:
+            return
+        self.online.send("report", "POST", f"/v1/tanks/{self.visit_id}/report")
+        self.toast("Thanks. It's been reported.", (200, 200, 230), 4)
+        self.leave_visit()
+
+    def online_report(self, r):
+        pass
+
+    def online_forget(self, r):
+        pass
+
+    def visit(self, text, quiet=False, tid=None):
         try:
             vs = share.decode(text, self.state["settings"])
         except ValueError:
-            return self.deny("Copy a friend's tank code first (it starts with DA1:), then press Visit.")
+            if quiet:
+                return None
+            return self.deny("Copy a friend's tank code first, then press Visit.")
         if self.visiting:
             self.leave_visit()
         self.visit_code = share.clean_code(text)
+        self.visit_id = tid
         self.ui.panel = None
         self.my_tank = self.tank
         t = Tank(self, self.tank_rect.w // self.S)
@@ -1165,6 +1286,7 @@ class Game:
             return
         self.visiting = None
         self.visit_code = None
+        self.visit_id = None
         self.tank = self.my_tank
         self.my_tank = None
         if self.tank.w != self.tank_rect.w // self.S:
@@ -1176,11 +1298,13 @@ class Game:
         """(what the banner offers, the saved friend it's about): 'saved', 'update' or 'new'"""
         friends = self.state["friends"]
         for f in friends:
-            if f["code"] == self.visit_code:
+            if self.visit_id and f.get("id") == self.visit_id:
+                return "saved", f
+            if f["code"] == self.visit_code and (f.get("id") or not self.visit_id):
                 return "saved", f
         name = self.visiting.get("tank_name")
         for f in friends:
-            if name and f["tank"] == name:
+            if name and f["tank"] == name and not f.get("id"):
                 return "update", f
         return "new", None
 
@@ -1194,6 +1318,8 @@ class Game:
             return
         if kind == "update":
             f.update(code=self.visit_code, fish=len(vs["fish"]), saved=int(time.time()))
+            if self.visit_id:
+                f["id"] = self.visit_id
             return self.toast(f"Updated {f['name']} with this newer tank.", (150, 230, 160), 4)
         if len(friends) >= share.MAX_FRIENDS:
             return self.deny(f"Your friends list is full ({share.MAX_FRIENDS}). Remove someone first.")
@@ -1201,12 +1327,17 @@ class Game:
         if not name:
             taken = {x["name"] for x in friends}
             name = next(f"Friend {i}" for i in range(1, share.MAX_FRIENDS + 2) if f"Friend {i}" not in taken)
-        friends.append(dict(name=name, tank=vs.get("tank_name", ""), code=self.visit_code, fish=len(vs["fish"]),
-                            saved=int(time.time())))
+        entry = dict(name=name, tank=vs.get("tank_name", ""), code=self.visit_code, fish=len(vs["fish"]),
+                     saved=int(time.time()))
+        if self.visit_id:
+            entry["id"] = self.visit_id
+        friends.append(entry)
         self.toast(f"Saved {name}! Find them under Shop > My Tank.", (150, 230, 160), 5)
         self.sounds.play("buy", 0, self.now)
 
     def visit_friend(self, f):
+        if f.get("id") and self.online.enabled:
+            return self.visit_online(f["id"], friend=f)
         return self.visit(f["code"])
 
     def friend_new_code(self, f):
@@ -1257,6 +1388,13 @@ class Game:
             if save and name:
                 f["_friend"]["name"] = name
             name, save = "", False
+        if f.get("_code"):
+            typed = name if save else None
+            name, save = "", False
+            if typed is not None and not ONLINE_ID.match(typed):
+                self.deny("A tank code is 6 digits.")
+            elif typed is not None:
+                self.visit_online(typed)
         if save and name:
             f["name"] = name
             f["named"] = True
@@ -1337,6 +1475,10 @@ class Game:
             return
         from .pixfont import _GLYPHS
         for ch in txt:
+            if self.renaming.get("_code"):
+                if ch.isdigit() and ch.isascii() and len(self.rename_text) < 6:
+                    self.rename_text += ch
+                continue
             limit = 22 if self.renaming.get("_tank") else self.NAME_MAX
             if ch in _GLYPHS and len(self.rename_text) < limit:
                 self.rename_text += ch
@@ -1537,6 +1679,9 @@ class Game:
         self.sounds.play("level", 0, self.now)
 
     def reset_save(self):
+        me = self.state.get("online")
+        if me:                              # a fresh start also takes your tank off the server
+            self.online.send("forget", "DELETE", f"/v1/tanks/{me['id']}", key=me["key"])
         settings = self.state["settings"]
         self.state = E.new_state()
         self.state["settings"] = settings

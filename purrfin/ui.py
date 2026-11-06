@@ -335,9 +335,10 @@ class UI:
         r = self.tank
         name = vs.get("tank_name") or "a friend's tank"
         h = 34
-        rr = pygame.Rect(r.x + 4, r.y - h - 6, r.w - 8, h)
+        w = min(max(r.w - 8, 680), self.W - 8)
+        rr = pygame.Rect(max(4, r.right - 4 - w), r.y - h - 6, w, h)
         kind, saved = g.friend_for_visit()
-        room = rr.w - 210 - (0 if kind == "saved" else 130)
+        room = rr.w - 210 - (0 if kind == "saved" else 130) - (92 if g.visit_id else 0)
         for lab in (f"Visiting {name}  -  {len(vs['fish'])} fish   (just looking: nothing here changes your game)",
                     f"Visiting {name}  -  {len(vs['fish'])} fish  (just looking)",
                     f"Visiting {name}", name):
@@ -351,6 +352,18 @@ class UI:
                         g.save_friend, col=NAV, font=self.f_small,
                         tip=["Save this tank", "Visit it again any time from", "Shop > My Tank"] if kind == "new"
                         else [f"Update {saved['name']}", "Keep this newer tank instead", "of the one you saved"])
+        if g.visit_id:
+            sure = self.confirm == ("report",)
+
+            def report():
+                if sure:
+                    self.confirm = None
+                    g.report_tank()
+                else:
+                    self.confirm = ("report",)
+            bx = rr.right - 190 - (0 if kind == "saved" else 126) - 86
+            self.button(scr, (bx, rr.y + 3, 80, 28), "Sure?" if sure else "Report", report, col=BAD if sure else NAV,
+                        font=self.f_small, tip=["Report this tank", "For a rude name or something", "that shouldn't be here"])
 
     def clip_text(self, text, font, room):
         if font.size(text)[0] <= room:
@@ -404,16 +417,64 @@ class UI:
         y += 38
         return y - y0
 
+    def share_section(self, scr, view, y):
+        """your 6-digit code, or the button that gets you one"""
+        g, s = self.g, self.g.state
+        y0 = y
+        x = view.x + 8
+        me = s.get("online")
+        bx = view.right - 16
+
+        def add(lab, cb, col=NAV, tip=None):
+            nonlocal bx
+            w = self.f_small.size(lab)[0] + 20
+            bx -= w
+            self.button(scr, (bx, y + 2, w, 28), lab, cb, col=col, font=self.f_small, tip=tip)
+            bx -= 6
+        sure = self.confirm == ("share",)
+
+        def press():
+            if sure:
+                self.confirm = None
+                if me:
+                    g.stop_sharing()
+                else:
+                    g.share_tank()
+            else:
+                self.confirm = ("share",)
+        add("Type a code", g.start_code_entry, GOOD, ["Visit a friend's tank", "Type their 6-digit code"])
+        if me:
+            add("Sure?" if sure else "Stop sharing", press, BAD if sure else NAV,
+                ["Stop sharing", "Deletes your tank from the server", "Your code stops working"])
+            add("Copy", lambda: g.copy_short_code(), NAV, ["Copy your code"])
+            self.text(scr, f"Your tank code: {me['id']}", self.f_norm, ACC, (x, y + 8))
+            y += 36
+        else:
+            add("Sure? Share it" if sure else "Share my tank", press, GOOD if sure else (120, 100, 190),
+                ["Get a 6-digit code", "Friends type it to see your tank"])
+            self.text(scr, "Share your tank", self.f_norm, ACC, (x, y + 8))
+            y += 34
+            note = ("Sharing puts your fish, their names, toys, theme and tank name on the game's server, where anyone "
+                    "with your code can see them. You can stop any time.")
+            for ln in self.wrap(note, self.f_small, view.w - 30):
+                self.text(scr, ln, self.f_small, DIM, (x, y))
+                y += 17
+            y += 4
+        return y - y0
+
     def friends_section(self, scr, view, y):
         """saved tanks: visit again, swap in a newer code, rename, remove"""
         g, s = self.g, self.g.state
         y0 = y
         x = view.x + 8
         friends = s["friends"]
+        if g.online.enabled:
+            y += self.share_section(scr, view, y)
         self.text(scr, f"Friends' tanks ({len(friends)})" if friends else "Friends' tanks", self.f_norm, ACC, (x, y + 4))
         y += 26
-        note = ("Each one shows the tank as it was when your friend copied the code. Ask them for a new one to see it now."
-                if friends else "Visit a friend's tank and press Save friend to keep it here.")
+        note = ("Visit a friend's tank and press Save friend to keep it here." if not friends
+                else "Friends with a 6-digit code show their latest tank. The others show the tank from when they copied their long code."
+                if g.online.enabled else "Each one shows the tank as it was when your friend copied the code.")
         for ln in self.wrap(note, self.f_small, view.w - 30):
             self.text(scr, ln, self.f_small, DIM, (x, y))
             y += 17
@@ -430,11 +491,13 @@ class UI:
                     g.remove_friend(f)
                 else:
                     self.confirm = ("friend", id(f))
-            for lab, cb, col, tip in (("Sure?" if sure else "Remove", remove, BAD if sure else NAV, None),
-                                      ("Rename", lambda f=f: g.rename_friend(f), NAV, None),
-                                      ("New code", lambda f=f: g.friend_new_code(f), NAV,
-                                       ["They sent a newer code?", "Copy it, then press this"]),
-                                      ("Visit", lambda f=f: g.visit_friend(f), GOOD, None)):
+            acts = [("Sure?" if sure else "Remove", remove, BAD if sure else NAV, None),
+                    ("Rename", lambda f=f: g.rename_friend(f), NAV, None)]
+            if not f.get("id"):
+                acts.append(("New code", lambda f=f: g.friend_new_code(f), NAV,
+                             ["They sent a newer code?", "Copy it, then press this"]))
+            acts.append(("Visit", lambda f=f: g.visit_friend(f), GOOD, None))
+            for lab, cb, col, tip in acts:
                 w = self.f_small.size(lab)[0] + 16
                 bx -= w
                 self.button(scr, (bx, rr.y + 9, w, 28), lab, cb, col=col, font=self.f_small, tip=tip)
@@ -442,8 +505,8 @@ class UI:
             room = bx - rr.x - 18
             self.text(scr, self.clip_text(f["name"], self.f_norm, room), self.f_norm, TEXT, (rr.x + 10, rr.y + 5))
             when = time.strftime("%b %d", time.localtime(f["saved"])) if f["saved"] else "?"
-            self.text(scr, self.clip_text(f"{f['fish']} fish  -  from {when}", self.f_small, room), self.f_small, DIM,
-                      (rr.x + 10, rr.y + 26))
+            sub = f"{f['fish']} fish  -  code {f['id']}" if f.get("id") else f"{f['fish']} fish  -  from {when}"
+            self.text(scr, self.clip_text(sub, self.f_small, room), self.f_small, DIM, (rr.x + 10, rr.y + 26))
             y += 50
         return y - y0 + 8
 
@@ -694,13 +757,13 @@ class UI:
         g = self.g
         f = g.renaming
         w = 480
-        hint = self.wrap("Enter saves, Esc cancels", self.f_small, w - 30)
+        hint = self.wrap("Enter to visit, Esc cancels" if f.get("_code") else "Enter saves, Esc cancels", self.f_small, w - 30)
         h = 150 + 16 * (len(hint) - 1)
         r = self.tank
         rr = pygame.Rect(r.centerx - w // 2, self.hud_top() - 8 - h, w, h)
         rr.clamp_ip(scr.get_rect())
         self.box(scr, rr, BG)
-        title = "Name this friend" if f.get("_friend") else "Name your tank" if f.get("_tank") else f"Name your {SPECIES_BY_ID[f['sp']]['name']}"
+        title = "Type your friend's tank code" if f.get("_code") else "Name this friend" if f.get("_friend") else "Name your tank" if f.get("_tank") else f"Name your {SPECIES_BY_ID[f['sp']]['name']}"
         self.text(scr, title, self.f_norm, ACC, (rr.centerx, rr.y + 12), "midtop")
         box = pygame.Rect(rr.x + 30, rr.y + 42, rr.w - 60, 36)
         self.box(scr, box, (18, 22, 36), bevel=False)
@@ -708,10 +771,12 @@ class UI:
         self.text(scr, g.rename_text + caret, self.f_big, TEXT, (box.x + 10, box.centery + 1), "midleft")
         for i, ln in enumerate(hint):                 # wrapped so it always fits the box
             self.text(scr, ln, self.f_small, DIM, (rr.centerx, rr.y + 84 + 16 * i), "midtop")
-        self.button(scr, (rr.centerx - 220, rr.bottom - 44, 120, 32), "Save", lambda: g.finish_rename(True), col=GOOD)
-        self.button(scr, (rr.centerx - 90, rr.bottom - 44, 180, 32), "Remove name", g.remove_name,
-                    enabled=bool(f.get("named")), col=BAD,
-                    tip=["Remove name", "Takes the name tag off this fish"])
+        self.button(scr, (rr.centerx - 220, rr.bottom - 44, 120, 32), "Visit" if f.get("_code") else "Save",
+                    lambda: g.finish_rename(True), col=GOOD)
+        if not (f.get("_code") or f.get("_friend")):
+            self.button(scr, (rr.centerx - 90, rr.bottom - 44, 180, 32), "Remove name", g.remove_name,
+                        enabled=bool(f.get("named")), col=BAD,
+                        tip=["Remove name", "Takes the name tag off this fish"])
         self.button(scr, (rr.centerx + 100, rr.bottom - 44, 120, 32), "Cancel", lambda: g.finish_rename(False), col=NAV)
         self.panel_rect = self.panel_rect or rr
 
