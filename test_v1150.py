@@ -15,7 +15,7 @@ from purrfin.game import Game, KEY  # noqa: E402
 winutil.monitors = lambda: [dict(x=0, y=0, w=1920, h=1040, primary=True)]
 pygame.init()
 ok = True
-COMPACT = bool(os.environ.get("DA_COMPACT"))
+COMPACT = bool(os.environ.get("DA_COMPACT")) or winutil.COMPACT      # Macs resize their window for menus
 
 
 def check(name, cond):
