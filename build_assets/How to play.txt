@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.12.0)
+DESKTOP AQUARIUM  (version 1.13.0)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -28,7 +28,7 @@ MAKE IT YOURS (Shop > My Tank)
   - Name your tank: the name goes on a little plaque on the front.
   - Lights: keep the real day & night clock, or pick Moonlight, Sunset, Glow, Purple, Deep sea.
   - Take photo: saves a picture in your Pictures folder (Desktop Aquarium).
-  - Share my tank gives you a 6-digit code. Friends press Type a code and enter it to look at
+  - Share my tank gives you a 6-digit code. Friends press Type a code and type or paste it to look at
     your tank (just looking - it doesn't change anything in their game). Sharing puts your fish,
     their names, toys, theme and tank name on the game's server, where anyone with the code can
     see them. Stop sharing deletes them. Nothing is sent unless you press Share.
@@ -95,6 +95,8 @@ GOOD TO KNOW
   - "Chill" pauses hunger and happiness if you just want to watch.
   - Pick the tank up and put it anywhere: drag any empty water, or the handle that appears on
     top of the tank. It works across monitors. Options > Position puts it back at the bottom.
+  - Stretch the tank: pull the handle on its left or right side to make it wider or narrower.
+  - Don't like the +numbers that pop up? Options > Money numbers turns them off.
   - Options lets you change the tank size, position, brightness, monitor, sound and more.
   - Text too small? Options > UI size makes all the buttons and text 150% or 200% bigger.
   - Computer lagging? Options > Performance > Battery saver makes the tank even lighter.

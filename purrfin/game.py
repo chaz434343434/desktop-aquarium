@@ -105,6 +105,7 @@ class Game:
         self.drag_toy = None
         self.tank_move = None         # [grab x, grab y] inside the tank while it's being carried
         self.tank_press = None        # desktop spot where empty water was pressed (may turn into a carry)
+        self.tank_stretch = None      # while pulling an edge: which side, where the far edge stays, grab offset
         self.ui_below = False         # no room above the tank: panels and messages open below it
         self.drag_spot = None         # [key, start_x, moved] while holding the jar / nest
         self.mouse_low = None
@@ -324,6 +325,8 @@ class Game:
             total = full
         if self.compact:                                   # exactly the tank's width, even with the shop open
             win_w = min(m["w"], tw)
+        elif self.tank_stretch:                            # room to grow without rebuilding the window each time
+            win_w = m["w"]
         elif self.minimized or not self.compact_tall:      # see-through anyway: just room for the HUD row
             win_w = min(m["w"], max(tw, int(HUD_W_OPEN * k)))
         else:
@@ -391,6 +394,64 @@ class Game:
             self.win_x, self.win_y = win_x, win_y
             winutil.move(self.hwnd, win_x, win_y, self.win_w, self.win_h, self.state["settings"]["topmost"])
 
+    def begin_tank_stretch(self, side):
+        """pull the left or right edge of the tank to change its width"""
+        if self.visiting or self.minimized:
+            return
+        self.ui.panel = None
+        self.ui.confirm = None
+        self.tank_press = None
+        left = self.win_x + self.tank_rect.x
+        right = left + self.tank_rect.w
+        edge, anchor = (right, left) if side == "right" else (left, right)
+        self.tank_stretch = dict(side=side, anchor=anchor, grab=self.screen_mouse()[0] - edge, next=0.0)
+        self.relayout()
+
+    def tick_tank_stretch(self):
+        ts = self.tank_stretch
+        if not ts:
+            return
+        if not winutil.left_button_down():
+            return self.drop_stretch()
+        if self.now < ts["next"]:
+            return
+        st = self.state["settings"]
+        m = self.mon
+        edge = self.screen_mouse()[0] - ts["grab"]
+        room = (m["x"] + m["w"] - ts["anchor"]) if ts["side"] == "right" else (ts["anchor"] - m["x"])
+        smallest = 480
+        if self.compact:
+            smallest = int(HUD_W * max(1.0, float(st.get("uiscale", 1.0))))
+        tw = max(smallest, min(room, abs(edge - ts["anchor"])))
+        tw = min(tw, m["w"]) // self.S * self.S
+        if tw == self.tank_rect.w:
+            return
+        ts["next"] = self.now + (0.12 if self.compact else 0.05)
+        st["width"] = (tw + 0.5) / m["w"]
+        left = ts["anchor"] if ts["side"] == "right" else ts["anchor"] - tw
+        docked = not self.tank_pos() and (st["align"], ts["side"]) in (("right", "left"), ("left", "right"))
+        if not docked:          # the far edge stays put, wherever that leaves the middle of the tank
+            st["tank_pos"] = [left + tw // 2, self.win_y + self.tank_rect.y + self.tank_rect.h // 2]
+        self.relayout()
+
+    def drop_stretch(self):
+        self.tank_stretch = None
+        self.relayout()
+        self.save()
+        self.sounds.play("plop", 0, self.now)
+
+    def paste_tank_code(self):
+        """Ctrl+V or the Paste button in the Type a code box"""
+        text = winutil.get_clipboard() or ""
+        if share.PREFIX in text:              # a long code works here too
+            self.finish_rename(False)
+            return self.visit(text)
+        found = re.search(r"(?<![0-9])[1-9][0-9]{5}(?![0-9])", text)
+        if found:
+            self.rename_text = found.group()
+        else:
+            self.deny("Copy a tank code first, then paste it here.")
+
     def drop_tank(self):
         self.tank_move = None
         self.relayout()                     # settle on whichever monitor it was dropped on
@@ -454,6 +515,7 @@ class Game:
     def update(self, dt):
         self.now += dt
         self.tick_tank_move()
+        self.tick_tank_stretch()
         self.tick_online(dt)
         s = self.state
         s["stats"]["playtime"] += dt
@@ -806,6 +868,8 @@ class Game:
         self.tank_press = None
         if self.tank_move:
             self.drop_tank()
+        if self.tank_stretch:
+            self.drop_stretch()
         if self.food_drag:
             fid, moved = self.food_drag
             self.food_drag = None
@@ -833,7 +897,7 @@ class Game:
         if self.ui.over_panel(pos) or self.to_low(pos):
             self.note_input()
         self.ui.set_mouse(pos)
-        if self.tank_move:
+        if self.tank_move or self.tank_stretch:
             self.mouse_low = None
             return
         if self.tank_press:
@@ -1457,6 +1521,8 @@ class Game:
             if e.key == pygame.K_ESCAPE:
                 self.ui.panel = None
             return
+        if self.renaming.get("_code") and e.key == pygame.K_v and getattr(e, "mod", 0) & (pygame.KMOD_CTRL | pygame.KMOD_META):
+            return self.paste_tank_code()
         if e.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
             self.finish_rename(True)
         elif e.key == pygame.K_ESCAPE:

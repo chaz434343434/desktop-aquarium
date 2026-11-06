@@ -282,6 +282,7 @@ class UI:
             self.panel = None
         self.panel_rect = None
         self.grip_rect = None
+        self.draw_floaters(scr)          # under the panels, so numbers never show through them
         if self.panel:
             self.draw_panel(scr)
         self.draw_toasts(scr)
@@ -291,7 +292,6 @@ class UI:
             self.draw_update(scr)
         elif g.welcome:
             self.draw_welcome(scr)
-        self.draw_floaters(scr)
         self.draw_fish_tip(scr)
         self.draw_food_drag(scr)
         self.draw_tips(scr)
@@ -301,10 +301,11 @@ class UI:
         r = self.tank
         grip = pygame.Rect(r.centerx - 34, r.y + 1, 68, 14)
         self.tank_grip = grip
-        carrying = bool(self.g.tank_move)
+        carrying = bool(self.g.tank_move or self.g.tank_stretch)
         if not carrying and not (self.mouse and r.inflate(0, 8).collidepoint(self.mouse)):
+            self.set_stretch_cursor(False)
             return
-        hot = carrying or grip.collidepoint(self.mouse)
+        hot = bool(self.g.tank_move) or bool(self.mouse and grip.collidepoint(self.mouse))
         scr.fill((120, 200, 240) if hot else (50, 70, 100), grip)
         pygame.draw.rect(scr, (20, 30, 50), grip, 1)
         for gx in range(grip.x + 8, grip.right - 8, 6):
@@ -312,6 +313,33 @@ class UI:
                 scr.fill((16, 28, 48) if hot else (130, 160, 190), (gx, gy, 2, 2))
         self.hits.append((grip, self.g.begin_tank_move))
         self.tips.append((grip, ["Move the tank", "Hold and drag it anywhere", "(dragging empty water works too)"]))
+        self.draw_stretch_handles(scr, r)
+
+    def draw_stretch_handles(self, scr, r):
+        """a handle on each side of the tank: pull to make it wider or narrower"""
+        g = self.g
+        over = False
+        for side, x in (("left", r.x), ("right", r.right - 14)):
+            zone = pygame.Rect(x, r.y + 16, 14, r.h - 24)
+            hot = (g.tank_stretch or {}).get("side") == side or bool(self.mouse and zone.collidepoint(self.mouse))
+            over = over or hot
+            bar = pygame.Rect(zone.centerx - 4, zone.centery - 22, 8, 44)
+            scr.fill((120, 225, 255) if hot else (225, 235, 245), bar)
+            pygame.draw.rect(scr, (20, 30, 50), bar, 1)
+            for gy in range(bar.y + 8, bar.bottom - 8, 6):
+                scr.fill((30, 50, 80), (bar.x + 3, gy, 2, 2))
+            self.hits.append((zone, lambda s=side: g.begin_tank_stretch(s)))
+            self.tips.append((zone, ["Stretch the tank", "Pull to make it wider or narrower"]))
+        self.set_stretch_cursor(over)
+
+    def set_stretch_cursor(self, on):
+        if on == getattr(self, "_stretch_cursor", False):
+            return
+        self._stretch_cursor = on
+        try:
+            pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_SIZEWE if on else pygame.SYSTEM_CURSOR_ARROW)
+        except pygame.error:
+            pass
 
     def draw_plaque(self, scr):
         """the tank's name on a little brass plaque on the front of the stand"""
@@ -676,7 +704,10 @@ class UI:
     def draw_floaters(self, scr):
         g = self.g
         top = self.tank.y + 14
+        money = g.state["settings"].get("money_numbers", True)
         for x, y, text, col, life in g.tank.texts:
+            if not money and text.startswith("+"):
+                continue                  # "Lv 5!" and the like still show
             sx, sy = self.to_ui(x, y)
             img = self.f_norm.render(text, True, col)
             rr = img.get_rect(center=(sx, max(top, sy)))
@@ -757,7 +788,7 @@ class UI:
         g = self.g
         f = g.renaming
         w = 480
-        hint = self.wrap("Enter to visit, Esc cancels" if f.get("_code") else "Enter saves, Esc cancels", self.f_small, w - 30)
+        hint = self.wrap("Type or paste it. Enter to visit, Esc cancels" if f.get("_code") else "Enter saves, Esc cancels", self.f_small, w - 30)
         h = 150 + 16 * (len(hint) - 1)
         r = self.tank
         rr = pygame.Rect(r.centerx - w // 2, self.hud_top() - 8 - h, w, h)
@@ -773,6 +804,9 @@ class UI:
             self.text(scr, ln, self.f_small, DIM, (rr.centerx, rr.y + 84 + 16 * i), "midtop")
         self.button(scr, (rr.centerx - 220, rr.bottom - 44, 120, 32), "Visit" if f.get("_code") else "Save",
                     lambda: g.finish_rename(True), col=GOOD)
+        if f.get("_code"):
+            self.button(scr, (rr.centerx - 90, rr.bottom - 44, 180, 32), "Paste", g.paste_tank_code, col=NAV,
+                        tip=["Paste a copied code", "(Ctrl+V works too)"])
         if not (f.get("_code") or f.get("_friend")):
             self.button(scr, (rr.centerx - 90, rr.bottom - 44, 180, 32), "Remove name", g.remove_name,
                         enabled=bool(f.get("named")), col=BAD,
@@ -1731,6 +1765,11 @@ class UI:
         sb(X, 80, "On", lambda: g.change_setting("nametags", True), st.get("nametags", True))
         sb(X + 86, 80, "Off", lambda: g.change_setting("nametags", False), not st.get("nametags", True))
         self.text(scr, "(names you give show above your fish)", self.f_small, DIM, (X + 182, y + 6))
+        y += 36
+        label("Money numbers")
+        sb(X, 80, "On", lambda: g.change_setting("money_numbers", True), st.get("money_numbers", True))
+        sb(X + 86, 80, "Off", lambda: g.change_setting("money_numbers", False), not st.get("money_numbers", True))
+        self.text(scr, "(the +numbers that pop up in the tank)", self.f_small, DIM, (X + 182, y + 6))
         y += 36
         label("Bugs & Support")
         self.button(scr, (X, y, 150, 28), "Report a bug", lambda: g.report("bug"), col=BAD,

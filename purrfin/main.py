@@ -39,7 +39,7 @@ class Pacer:
         if self.covered:
             return COVERED_FPS
         active, idle = FPS.get(g.state["settings"].get("power", "normal"), FPS["normal"])
-        if g.tank_move:
+        if g.tank_move or g.tank_stretch:
             return max(FPS["normal"])                # being carried: keep up with the mouse
         busy = g.mouse_low is not None or g.ui.mouse is not None or g.ui.panel or g.now - g.last_input < 3
         return active if busy else idle

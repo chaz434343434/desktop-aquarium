@@ -17,7 +17,7 @@ SAVE_VERSION = 4
 def default_settings():
     return dict(width=0.30, align="right", scale=3, opacity=245, sound=True,
                 volume=0.5, topmost=True, monitor=-1, daynight=True, panel_pos=None, nametags=True, brightness=0,
-                autoupdate=True, uiscale=1.0, power="normal", light="auto", ambience="off", tank_pos=None)
+                autoupdate=True, uiscale=1.0, power="normal", light="auto", ambience="off", tank_pos=None, money_numbers=True)
 
 
 def new_state(keep=None):
