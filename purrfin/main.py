@@ -41,7 +41,8 @@ class Pacer:
         active, idle = FPS.get(g.state["settings"].get("power", "normal"), FPS["normal"])
         if g.tank_move or g.tank_stretch:
             return max(FPS["normal"])                # being carried: keep up with the mouse
-        busy = g.mouse_low is not None or g.ui.mouse is not None or g.ui.panel or g.now - g.last_input < 3
+        busy = (g.mouse_low is not None or g.ui.mouse is not None or g.ui.panel or g.ui.closing
+                or g.now - g.last_input < 3)
         return active if busy else idle
 
 
@@ -224,7 +225,7 @@ def run_loop(g, args, crash_after=0.0):
                     g.ui.open_tab("fish")
                 else:
                     g.change_setting("width", 0.30 if stress[1] % 2 else 0.45)
-        pygame.display.flip()
+        g.present()
         if args.seconds and t >= args.seconds:
             g.running = False
 

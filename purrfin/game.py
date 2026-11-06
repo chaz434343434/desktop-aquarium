@@ -32,7 +32,7 @@ BACKUP_EVERY = 300           # every 5 minutes the save is also copied to a back
 BACKUPS = 3
 WIN_H = 660
 HUD_W = 1000                 # Mac: the narrowest window that fits every button on the HUD
-HUD_W_OPEN = 1080            # Windows: the same, with a bit more room for buff timers
+HUD_W_OPEN = 1120            # Windows: room for the HUD, or the Shop with a fish's stats beside it
 STRIP_H = 30
 
 
@@ -106,6 +106,11 @@ class Game:
         self.tank_move = None         # [grab x, grab y] inside the tank while it's being carried
         self.tank_press = None        # desktop spot where empty water was pressed (may turn into a carry)
         self.tank_stretch = None      # while pulling an edge: which side, where the far edge stays, grab offset
+        self.reveal = False           # the window was rebuilt: keep it see-through until its first picture is up
+        self.placed = None            # where the window was last put
+        self.drawn_region = None      # the part of the window drawn last frame (None = all of it)
+        self.update_rect = None       # the part present() has to send to the screen (None = all of it)
+        self.view = pygame.Rect(0, 0, 1, 1)
         self.ui_below = False         # no room above the tank: panels and messages open below it
         self.drag_spot = None         # [key, start_x, moved] while holding the jar / nest
         self.mouse_low = None
@@ -267,6 +272,14 @@ class Game:
             return False
 
     # ------------------------------------------------------------ window
+    def wide_panel(self):
+        """menus you've dragged somewhere need the monitor's whole width. The window stays that wide all the
+        time, open or closed, so opening a menu never has to rebuild it."""
+        ui = getattr(self, "ui", None)
+        if not ui or self.compact:
+            return False
+        return bool(ui.drag or self.state["settings"].get("panel_pos"))
+
     def tank_pos(self):
         """where the player dropped the tank (its centre on the desktop), or None if it's docked at the bottom"""
         p = self.state["settings"].get("tank_pos")
@@ -310,27 +323,25 @@ class Game:
             tsy = m["y"] + m["h"] - th
         # ---- how big the window around it needs to be
         ui = getattr(self, "ui", None)
-        big = bool(ui and ui.panel == "rings") and not self.minimized        # the Ring Tree gets the whole screen
+        big = bool(ui and ui.big_panel()) and not self.minimized             # the Ring Tree gets the whole screen
         full = min(int(WIN_H * k), m["h"])
-        fits_exactly = self.minimized or (self.compact and not self.compact_tall)
-        if self.minimized:
-            total = min(full, int(50 * k))
-        elif big:
+        fits_exactly = self.compact and (self.minimized or not self.compact_tall)
+        if big:
             total = min(m["h"], int(840 * k)) if self.compact else m["h"]
-        elif not self.compact_tall and self.compact:       # Mac: just the tank and its two rows of buttons
+        elif self.compact and self.minimized:
+            total = min(full, int(50 * k))
+        elif self.compact and not self.compact_tall:       # Mac: just the tank and its two rows of buttons
             total = min(full, th + int((2 * STRIP_H + 10) * k))
-        elif not self.compact_tall:                        # tank + buttons + room for a few messages
-            total = min(full, th + int((2 * STRIP_H + 16 + 124) * k))
-        else:
+        else:                                              # the same size with a menu open or closed
             total = full
         if self.compact:                                   # exactly the tank's width, even with the shop open
             win_w = min(m["w"], tw)
         elif self.tank_stretch:                            # room to grow without rebuilding the window each time
             win_w = m["w"]
-        elif self.minimized or not self.compact_tall:      # see-through anyway: just room for the HUD row
-            win_w = min(m["w"], max(tw, int(HUD_W_OPEN * k)))
-        else:
+        elif big or self.wide_panel():
             win_w = m["w"]
+        else:                                              # see-through anyway: room for the HUD row and the Shop
+            win_w = min(m["w"], max(tw, int(HUD_W_OPEN * k)))
         if not pos and st["align"] == "center":
             win_x = m["x"] + (m["w"] - win_w) // 2
         else:
@@ -358,6 +369,9 @@ class Game:
                 ty = total - th
         self.win_x, self.win_y, self.win_w, self.win_h = win_x, win_y, win_w, total
         self.tank_rect = pygame.Rect(tsx - win_x, ty, tw, th)
+        # the part that changes when nothing is open: only that part gets redrawn, to keep the game light
+        tall = th + hud + int(170 * k)
+        self.view = pygame.Rect(0, 0 if self.ui_below else max(0, ty + th - tall), win_w, tall).clip((0, 0, win_w, total))
 
     # ------------------------------------------------------------ picking the tank up
     def screen_mouse(self):
@@ -464,17 +478,25 @@ class Game:
         if first:
             os.environ["SDL_VIDEO_WINDOW_POS"] = f"{self.win_x},{self.win_y}"
         size = (self.win_w, self.win_h)
-        if self.screen is None or self.screen.get_size() != size:
+        resized = self.screen is None or self.screen.get_size() != size
+        if resized and self.screen is not None:
+            winutil.set_alpha(self.hwnd, KEY, 0)      # see-through until the new window has something on it
+        if resized:
             if self.screen is None:
                 from . import sprites
                 pygame.display.set_icon(pygame.transform.scale(sprites.fish_icon("sunflower", 1), (32, 18)))
             self.screen = pygame.display.set_mode(size, pygame.NOFRAME)
             pygame.display.set_caption("Desktop Aquarium")
             self.hwnd = pygame.display.get_wm_info().get("window")
-            winutil.style_overlay(self.hwnd, KEY, st["opacity"], st["topmost"])
+            winutil.style_overlay(self.hwnd, KEY, 0, st["topmost"])
             winutil.on_session_end(self.hwnd, self.session_ending)
-        winutil.move(self.hwnd, self.win_x, self.win_y, self.win_w, self.win_h, st["topmost"])
-        winutil.set_alpha(self.hwnd, KEY, st["opacity"])
+            self.reveal = True
+            self.drawn_region = None
+        place = (self.win_x, self.win_y, self.win_w, self.win_h, st["topmost"])
+        if place != self.placed:
+            winutil.move(self.hwnd, *place)
+            self.placed = place
+        winutil.set_alpha(self.hwnd, KEY, 0 if self.reveal else st["opacity"])
 
     def relayout(self):
         self.layout()
@@ -487,14 +509,15 @@ class Game:
         if self.screen is None:
             return
         ui = self.ui
-        tall = bool(ui.panel or self.renaming or ui.update_prompt or self.welcome or self.state.get("pending")) \
-            and not self.visiting
-        big = ui.panel == "rings"
+        tall = bool(ui.panel or ui.closing or (ui.animate and ui.shown_panel) or self.renaming or ui.update_prompt or self.welcome
+                    or self.state.get("pending")) and not self.visiting
+        big = ui.big_panel()
         if tall != self.compact_tall or self.minimized != getattr(self, "_was_min", False) \
-                or big != getattr(self, "_was_big", False):
+                or big != getattr(self, "_was_big", False) or self.wide_panel() != getattr(self, "_was_wide", False):
             self.compact_tall = tall
             self._was_min = self.minimized
             self._was_big = big
+            self._was_wide = self.wide_panel()
             self.relayout()
 
     def to_low(self, pos):
@@ -1811,10 +1834,30 @@ class Game:
         finally:
             E.cache_off()
 
+    def present(self):
+        """put the finished frame on screen. Called right after drawing, never before."""
+        if self.update_rect is None:
+            pygame.display.flip()
+        else:
+            pygame.display.update(self.update_rect)
+        if self.reveal:                     # the rebuilt window has its picture now: show it
+            self.reveal = False
+            winutil.set_alpha(self.hwnd, KEY, self.state["settings"]["opacity"])
+
     def _draw(self):
         self.fit_compact()
         scr = self.screen
-        scr.fill((18, 22, 34) if self.compact else KEY)
+        base = (18, 22, 34) if self.compact else KEY
+        # With nothing open and the mouse elsewhere, only the tank's part of the window is redrawn.
+        whole = self.compact or self.compact_tall or self.ui.mouse is not None or self.ui.k != 1.0
+        region = None if whole else self.view.copy()
+        if region is None or self.drawn_region is None:
+            scr.fill(base)
+            self.update_rect = None
+        else:
+            self.update_rect = region.union(self.drawn_region)
+            scr.fill(base, self.update_rect)
+        self.drawn_region = region
         r = self.tank_rect
         if not self.minimized:
             low = self.tank.draw()

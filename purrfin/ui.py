@@ -1,4 +1,5 @@
 """Hi-res UI: HUD strip, panels (shop / fishdex / options), tooltips, toasts."""
+import os
 import time
 
 import pygame
@@ -84,6 +85,13 @@ class UI:
         self.content_h = 0
         self.view_h = 0
         self.rings = RingTree(self)
+        self.animate = os.environ.get("SDL_VIDEODRIVER") != "dummy"    # automated tests want the finished picture
+        self.clock = time.monotonic
+        self.shown_panel = None       # the panel on screen last frame
+        self.open_t = 0.0             # when the panel started sliding open
+        self.under = None             # what's behind the panel, while it slides open
+        self.last_look = None         # (picture, rect, opens below the tank, name) of the open panel
+        self.closing = None           # the same, plus the start time, while it slides shut
         self.tank_grip = None
 
     # ------------------------------------------------------------ helpers
@@ -185,6 +193,7 @@ class UI:
             return True
         if self.grip_rect and self.grip_rect.collidepoint(pos) and self.panel_rect:
             self.drag = (pos[0] - self.panel_rect.x, pos[1] - self.panel_rect.y)
+            self.g.fit_compact()                  # room to move it around
             return True
         if self.panel_rect and self.panel_rect.collidepoint(pos):
             return True
@@ -258,12 +267,14 @@ class UI:
         self.hits = []
         self.tips = []
         g = self.g
+        if g.minimized or g.visiting:
+            self.shown_panel = self.closing = None
         if g.minimized:
             self.panel_rect = None
             r = self.tank
             lab = "Aquarium " + E.fmt(g.state["bubbles"])
             w = self.f_norm.size(lab)[0] + 46
-            b = pygame.Rect(r.right - w - 6, self.H - 40, w, 34)
+            b = pygame.Rect(r.right - w - 6, r.bottom - 40, w, 34)
             self.button(scr, b, "", self.restore, col=GOOD)
             scr.blit(sprites.scale_icon(3), (b.x + 10, b.y + 6))
             self.text(scr, lab, self.f_norm, TEXT, (b.x + 36, b.centery + 1), "midleft")
@@ -283,8 +294,12 @@ class UI:
         self.panel_rect = None
         self.grip_rect = None
         self.draw_floaters(scr)          # under the panels, so numbers never show through them
+        self.panel_changes()
         if self.panel:
             self.draw_panel(scr)
+            self.panel_finish(scr)
+        elif self.closing:
+            self.draw_closing(scr)
         self.draw_toasts(scr)
         if g.renaming:
             self.draw_rename(scr)
@@ -340,6 +355,61 @@ class UI:
             pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_SIZEWE if on else pygame.SYSTEM_CURSOR_ARROW)
         except pygame.error:
             pass
+
+    # ---- panels slide open and shut, like a drawer coming out from behind the buttons
+    PANEL_OPEN = 0.15
+    PANEL_CLOSE = 0.11
+
+    def big_panel(self):
+        """the Ring Tree needs the whole screen, for as long as it's on it"""
+        return (self.panel == "rings" or (self.animate and self.shown_panel == "rings")
+                or bool(self.closing and self.closing["name"] == "rings"))
+
+    def panel_changes(self):
+        if self.panel == self.shown_panel:
+            return
+        now = self.clock()
+        if self.shown_panel is None:
+            self.open_t = now
+            self.closing = None
+        elif self.panel is None and self.last_look and self.animate:
+            img, rr, below, name = self.last_look
+            self.closing = dict(img=img, rr=rr, below=below, name=name, t=now)
+        else:
+            self.open_t = 0.0                  # one panel straight to another: no need to slide
+        self.shown_panel = self.panel
+
+    def drawer(self, scr, img, rr, below, k):
+        """the part of the panel that's out so far. k goes 0 (shut) to 1 (fully out)."""
+        h = max(1, int(rr.h * k))
+        if below:
+            scr.blit(img, rr.topleft, (0, rr.h - h, rr.w, h))
+        else:
+            scr.blit(img, (rr.x, rr.bottom - h), (0, 0, rr.w, h))
+
+    def panel_begin(self, scr, rr):
+        """called with the panel's rectangle, just before it's drawn"""
+        sliding = self.animate and self.clock() - self.open_t < self.PANEL_OPEN
+        self.under = scr.subsurface(rr.clip(scr.get_rect())).copy() if sliding else None
+
+    def panel_finish(self, scr):
+        if not self.animate or not self.panel_rect:
+            return
+        rr = self.panel_rect.clip(scr.get_rect())
+        img = scr.subsurface(rr).copy()
+        self.last_look = (img, rr.copy(), self.g.ui_below, self.panel)
+        if self.under is not None and self.under.get_size() == rr.size:
+            t = min(1.0, (self.clock() - self.open_t) / self.PANEL_OPEN)
+            scr.blit(self.under, rr)
+            self.drawer(scr, img, rr, self.g.ui_below, 1 - (1 - t) ** 3)
+
+    def draw_closing(self, scr):
+        c = self.closing
+        t = (self.clock() - c["t"]) / self.PANEL_CLOSE
+        if t >= 1 or not scr.get_rect().contains(c["rr"]):
+            self.closing = None
+            return
+        self.drawer(scr, c["img"], c["rr"], c["below"], (1 - t) ** 2)
 
     def draw_plaque(self, scr):
         """the tank's name on a little brass plaque on the front of the stand"""
@@ -896,6 +966,7 @@ class UI:
             rr.midbottom = (r.centerx, self.H - 4)
             rr.clamp_ip(scr.get_rect())
             self.panel_rect = rr
+            self.panel_begin(scr, rr)
             self.rings.draw(scr, rr)
             return
         w = min(800, self.W - 8)
@@ -911,6 +982,7 @@ class UI:
             rr.topleft = pp
         rr.clamp_ip(scr.get_rect())
         self.panel_rect = rr
+        self.panel_begin(scr, rr)
         self.box(scr, rr, BG)
         # grip bar: drag here to move the panel
         grip = pygame.Rect(rr.x + 6, rr.y + 5, rr.w - 54, 10)

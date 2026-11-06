@@ -95,7 +95,7 @@ def set_alpha(hwnd, colorkey, alpha):
         w = _sdl_window()
         if w is not None:
             try:
-                w.opacity = max(0.2, min(1.0, alpha / 255))
+                w.opacity = max(0.2, min(1.0, alpha / 255)) if alpha else 0.0
             except Exception:
                 pass
         return
