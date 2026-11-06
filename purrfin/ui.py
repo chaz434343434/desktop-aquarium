@@ -451,6 +451,7 @@ class UI:
         y0 = y
         x = view.x + 8
         me = s.get("online")
+        is_open = bool(me) and me.get("open", True)
         bx = view.right - 16
 
         def add(lab, cb, col=NAV, tip=None):
@@ -464,26 +465,29 @@ class UI:
         def press():
             if sure:
                 self.confirm = None
-                if me:
+                if is_open:
                     g.stop_sharing()
                 else:
                     g.share_tank()
             else:
                 self.confirm = ("share",)
         add("Type a code", g.start_code_entry, GOOD, ["Visit a friend's tank", "Type their 6-digit code"])
-        if me:
-            add("Sure?" if sure else "Stop sharing", press, BAD if sure else NAV,
-                ["Stop sharing", "Deletes your tank from the server", "Your code stops working"])
+        if is_open:
+            add("Sure?" if sure else "Close my tank", press, BAD if sure else NAV,
+                ["Close your tank", "Takes it off the server", "Your code stays yours"])
             add("Copy", lambda: g.copy_short_code(), NAV, ["Copy your code"])
-            self.text(scr, f"Your tank code: {me['id']}", self.f_norm, ACC, (x, y + 8))
+            self.text(scr, f"Your tank code: {me['id']}  (open)", self.f_norm, ACC, (x, y + 8))
             y += 36
         else:
-            add("Sure? Share it" if sure else "Share my tank", press, GOOD if sure else (120, 100, 190),
-                ["Get a 6-digit code", "Friends type it to see your tank"])
-            self.text(scr, "Share your tank", self.f_norm, ACC, (x, y + 8))
+            add("Sure? Open it" if sure else "Open my tank", press, GOOD if sure else (120, 100, 190),
+                ["Open your tank", "Friends type your code to see it"])
+            if me:
+                add("Copy", lambda: g.copy_short_code(), NAV, ["Copy your code"])
+            self.text(scr, f"Your tank code: {me['id']}  (closed)" if me else "Get your tank code", self.f_norm, ACC,
+                      (x, y + 8))
             y += 34
-            note = ("Sharing puts your fish, their names, toys, theme and tank name on the game's server, where anyone "
-                    "with your code can see them. You can stop any time.")
+            note = ("Opening puts your fish, their names, toys, theme and tank name on the game's server, where anyone "
+                    "with your code can see them. You can close it any time, and you keep the same code.")
             for ln in self.wrap(note, self.f_small, view.w - 30):
                 self.text(scr, ln, self.f_small, DIM, (x, y))
                 y += 17

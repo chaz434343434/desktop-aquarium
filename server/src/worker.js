@@ -2,7 +2,8 @@
 //   POST   /v1/tanks              {code}  -> {id, key}   share a tank, get its 6-digit code and a secret key
 //   GET    /v1/tanks/:id                  -> {code, updated}
 //   PUT    /v1/tanks/:id          {code}  (needs the key) newer version of your tank
-//   DELETE /v1/tanks/:id                  (needs the key) stop sharing
+//   POST   /v1/tanks/:id/close            (needs the key) close it: the tank's data goes, the code stays yours
+//   DELETE /v1/tanks/:id                  (needs the key) give the code up completely
 //   POST   /v1/tanks/:id/report           someone reported it; enough different people hides it
 // The game checks every tank it downloads, so nothing here has to be trusted by players.
 // No accounts, and IP addresses are never stored (reports and limits keep only a one-way hash).
@@ -132,7 +133,7 @@ async function handle(request, env) {
     if (!(await allowed(env.LIMIT_READ, ip)) || (await overLimit(env, "wrong", ip, MAX_WRONG_CODES))) {
       return reply({ error: "slow down" }, 429);
     }
-    const row = await env.DB.prepare("SELECT code, updated FROM tanks WHERE id = ? AND hidden = 0").bind(id).first();
+    const row = await env.DB.prepare("SELECT code, updated FROM tanks WHERE id = ? AND hidden = 0 AND code != ''").bind(id).first();
     if (row) return reply({ code: row.code, updated: row.updated });
     await count(env, "wrong", ip);
     return reply({ error: "not found" }, 404);
@@ -156,13 +157,22 @@ async function handle(request, env) {
     return reply({ ok: true });
   }
 
+  if (parts.length === 4 && parts[3] === "close" && request.method === "POST") {
+    if (!(await allowed(env.LIMIT_WRITE, ip))) return reply({ error: "slow down" }, 429);
+    const owner = await ownerCheck(request, env, id);
+    if (owner === "gone") return reply({ error: "not found" }, 404);
+    if (owner !== "ok") return reply({ error: "not yours" }, 403);
+    await env.DB.prepare("UPDATE tanks SET code = '', updated = ? WHERE id = ?").bind(now, id).run();
+    return reply({ ok: true });
+  }
+
   if (parts.length === 4 && parts[3] === "report" && request.method === "POST") {
     if (!(await allowed(env.LIMIT_WRITE, ip)) || (await overLimit(env, "report", ip, MAX_REPORTS))) {
       return reply({ error: "slow down" }, 429);
     }
     await count(env, "report", ip);
     const who = await sha256(`${id}:${ip}:${env.REPORT_SALT || ""}`);
-    const tank = await env.DB.prepare("SELECT id FROM tanks WHERE id = ?").bind(id).first();
+    const tank = await env.DB.prepare("SELECT id FROM tanks WHERE id = ? AND code != ''").bind(id).first();
     if (!tank) return reply({ error: "not found" }, 404);
     await env.DB.prepare("INSERT OR IGNORE INTO reports (tank, who) VALUES (?, ?)").bind(id, who).run();
     const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM reports WHERE tank = ?").bind(id).first();

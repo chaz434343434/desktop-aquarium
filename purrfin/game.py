@@ -1212,7 +1212,7 @@ class Game:
         for r in self.online.poll():
             getattr(self, "online_" + r["kind"])(r)
         me = self.state.get("online")
-        if not me:
+        if not me or not me.get("open", True):
             return
         self.sync_t -= dt
         if self.sync_t <= 0:
@@ -1227,11 +1227,16 @@ class Game:
             self.toast(f"Copied {me['id']}!", (150, 230, 160), 3)
 
     def share_tank(self):
-        if self.state.get("online") or not self.online.enabled:
+        me = self.state.get("online")
+        if (me and me.get("open", True)) or not self.online.enabled:
             return
         code = share.encode(self.state)
-        if self.online.send("share", "POST", "/v1/tanks", dict(code=code), ctx=code):
-            self.toast("Sharing your tank...", (200, 220, 255), 3)
+        if me:                              # it already has its code: just open it again
+            sent = self.online.send("reopen", "PUT", f"/v1/tanks/{me['id']}", dict(code=code), me["key"], ctx=code)
+        else:
+            sent = self.online.send("share", "POST", "/v1/tanks", dict(code=code), ctx=code)
+        if sent:
+            self.toast("Opening your tank...", (200, 220, 255), 3)
 
     def online_share(self, r):
         d = r["data"] or {}
@@ -1241,11 +1246,29 @@ class Game:
         if r["status"] != "ok" or not (isinstance(tid, str) and ONLINE_ID.match(tid) and isinstance(key, str)
                                        and re.fullmatch("[0-9a-f]{64}", key)):
             return self.deny("Couldn't reach the tank server. Try again in a bit.")
-        self.state["online"] = dict(id=tid, key=key, sent=r["ctx"])
+        self.state["online"] = dict(id=tid, key=key, sent=r["ctx"], open=True)
         self.sync_t = SYNC_EVERY
         self.save()
-        self.toast(f"Your tank code is {tid}!", (150, 230, 160), 8)
+        self.toast(f"Your tank code is {tid}. It's yours for good!", (150, 230, 160), 8)
         self.sounds.play("level", 0, self.now)
+
+    def online_reopen(self, r):
+        me = self.state.get("online")
+        if not me:
+            return
+        if r["status"] == "ok":
+            me.update(open=True, sent=r["ctx"])
+            self.sync_t = SYNC_EVERY
+            self.save()
+            self.toast(f"Your tank is open again. Its code is still {me['id']}.", (150, 230, 160), 6)
+        elif r["status"] in ("notfound", "denied"):
+            self.state["online"] = None
+            self.save()
+            self.toast("Your old code is gone from the server. Press Open my tank for a new one.", (255, 190, 140), 8)
+        elif r["status"] == "busy":
+            self.deny("Too many tries. Wait a minute, then try again.")
+        else:
+            self.deny("Couldn't reach the tank server. Try again in a bit.")
 
     def online_sync(self, r):
         me = self.state.get("online")
@@ -1255,20 +1278,27 @@ class Game:
             me["sent"] = r["ctx"]
         elif r["status"] in ("notfound", "denied"):
             self.state["online"] = None
-            self.toast("Your shared tank is no longer on the server. Press Share my tank for a new code.", (255, 190, 140), 8)
+            self.toast("Your tank's code is no longer on the server. Press Open my tank for a new one.", (255, 190, 140), 8)
 
     def stop_sharing(self):
         me = self.state.get("online")
-        if me and self.online.send("stop", "DELETE", f"/v1/tanks/{me['id']}", key=me["key"]):
-            self.toast("Taking your tank off the server...", (200, 220, 255), 3)
+        if me and me.get("open", True) and self.online.send("stop", "POST", f"/v1/tanks/{me['id']}/close", key=me["key"]):
+            self.toast("Closing your tank...", (200, 220, 255), 3)
 
     def online_stop(self, r):
-        if r["status"] in ("ok", "notfound", "denied"):
+        me = self.state.get("online")
+        if not me:
+            return
+        if r["status"] == "ok":
+            me.update(open=False, sent=None)
+            self.save()
+            self.toast(f"Your tank is closed. Its code {me['id']} stays yours.", (200, 200, 230), 5)
+        elif r["status"] in ("notfound", "denied"):
             self.state["online"] = None
             self.save()
-            self.toast("Your tank isn't shared any more.", (200, 200, 230), 4)
+            self.toast("Your tank is off the server.", (200, 200, 230), 4)
         else:
-            self.deny("Couldn't reach the tank server, so your tank is still shared. Try again in a bit.")
+            self.deny("Couldn't reach the tank server, so your tank is still open. Try again in a bit.")
 
     def start_code_entry(self):
         if not self.online.enabled:
@@ -1292,11 +1322,11 @@ class Game:
         if vs:
             return
         if friend is not None:                        # no luck: show the copy we kept
-            why = ("is no longer shared" if r["status"] == "notfound" else "couldn't be reached")
+            why = ("is closed right now" if r["status"] == "notfound" else "couldn't be reached")
             self.visit(friend["code"], quiet=True)
             return self.toast(f"{friend['name']}'s tank {why}, so this is the copy you saved.", (255, 190, 140), 6)
         if r["status"] == "notfound":
-            return self.deny(f"There's no tank with the code {tid}.")
+            return self.deny(f"There's no open tank with the code {tid}.")
         if r["status"] == "busy":
             return self.deny("Too many tries. Wait a minute, then try again.")
         self.deny("Couldn't reach the tank server. Try again in a bit.")
@@ -1746,11 +1776,13 @@ class Game:
 
     def reset_save(self):
         me = self.state.get("online")
-        if me:                              # a fresh start also takes your tank off the server
-            self.online.send("forget", "DELETE", f"/v1/tanks/{me['id']}", key=me["key"])
+        if me and me.get("open", True):     # a fresh start closes your tank. The code stays yours.
+            self.online.send("forget", "POST", f"/v1/tanks/{me['id']}/close", key=me["key"])
         settings = self.state["settings"]
         self.state = E.new_state()
         self.state["settings"] = settings
+        if me:
+            self.state["online"] = dict(id=me["id"], key=me["key"], sent=None, open=False)
         self.tank.state = self.state
         self.tank.sync()
         self.save()

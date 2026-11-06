@@ -21,7 +21,12 @@ ID = re.compile(r"^[1-9][0-9]{5}$")
 
 
 def base_url():
-    return (os.environ.get("DA_ONLINE_URL") or ONLINE_URL).rstrip("/")
+    url = os.environ.get("DA_ONLINE_URL")
+    if url:
+        return url.rstrip("/")
+    if os.environ.get("SDL_VIDEODRIVER") == "dummy":     # automated tests never touch the real server by accident
+        return ""
+    return ONLINE_URL.rstrip("/")
 
 
 def ssl_context():

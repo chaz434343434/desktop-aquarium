@@ -50,6 +50,11 @@ class Fake(BaseHTTPRequestHandler):
             return self.out(200, {"code": "DA1:notatank", "id": "12", "key": "nope"})
         parts = self.path.strip("/").split("/")
         tid = parts[2] if len(parts) > 2 else None
+        if len(parts) == 4 and parts[3] == "close" and tid in TANKS:
+            if self.headers.get("Authorization") != "Bearer " + KEYS[tid]:
+                return self.out(403, {})
+            TANKS[tid] = ""
+            return self.out(200, {"ok": True})
         if self.command == "POST" and len(parts) == 2:
             tid = str(NEXT[0])
             NEXT[0] += 1
@@ -59,7 +64,7 @@ class Fake(BaseHTTPRequestHandler):
         if tid not in TANKS:
             return self.out(404, {})
         if self.command == "GET":
-            return self.out(200, {"code": TANKS[tid], "updated": 1})
+            return self.out(200, {"code": TANKS[tid], "updated": 1}) if TANKS[tid] else self.out(404, {})
         if self.command == "POST":
             return self.out(200, {"ok": True})
         if self.headers.get("Authorization") != "Bearer " + KEYS[tid]:
@@ -148,8 +153,8 @@ check("not shared to begin with", s["online"] is None)
 # ---- sharing asks first
 me.ui.panel, me.ui.tab = "shop", "mine"
 b = buttons(me)
-check("My Tank offers sharing", "Share my tank" in b and "Type a code" in b)
-b["Share my tank"][0]()
+check("My Tank offers sharing", "Open my tank" in b and "Type a code" in b)
+b["Open my tank"][0]()
 check("the first press only asks", not me.online.busy and s["online"] is None)
 if shots:
     os.makedirs(shots, exist_ok=True)
@@ -157,13 +162,13 @@ if shots:
     me.draw()
     pygame.image.save(me.screen, os.path.join(shots, "share_ask.png"))
 b = buttons(me)
-b["Sure? Share it"][0]()
+b["Sure? Open it"][0]()
 settle(me, lambda: s["online"])
 check("the second press shares it", s["online"] and len(s["online"]["id"]) == 6)
 tid, key = s["online"]["id"], s["online"]["key"]
 check("you get told your code", any(tid in t[0] for t in me.toasts))
 b = buttons(me)
-check("your code replaces the button", "Stop sharing" in b and "Copy" in b and "Share my tank" not in b)
+check("your code replaces the button", "Close my tank" in b and "Copy" in b and "Open my tank" not in b)
 b["Copy"][0]()
 check("Copy copies just the digits", clip[0] == tid)
 if shots:
@@ -240,22 +245,50 @@ check("sharing survives a Spawning Season", me.state["online"] and me.state["onl
 s = me.state
 me.ui.panel, me.ui.tab = "shop", "mine"
 b = buttons(me)
-b["Stop sharing"][0]()
-check("Stop sharing asks first", not me.online.busy)
+b["Close my tank"][0]()
+check("Close asks first", not me.online.busy)
 buttons(me)["Sure?"][0]()
-settle(me, lambda: s["online"] is None)
-check("Stop sharing takes it off", s["online"] is None)
+settle(me, lambda: not s["online"]["open"])
+check("Close takes it off but keeps the code", s["online"]["id"] == tid and not s["online"]["open"])
 fr.ui.panel, fr.ui.tab = "shop", "mine"
 buttons(fr)["Visit"][0]()
 settle(fr, lambda: fr.visiting)
 check("a friend who stopped sharing still shows your saved copy", fr.visiting and fr.visiting["tank_name"] == "Mr Lee's Tank")
-check("and you're told", any("no longer shared" in t[0] for t in fr.toasts))
+check("and you're told", any("closed right now" in t[0] for t in fr.toasts))
 check("that copy can't be reported", fr.visit_id is None)
 fr.leave_visit()
+
+# ---- open it again: always the same code
+s["bubbles"] = 0
+me.sync_t = 0.0
+n = len(LOG)
+me.update(0.01)
+settle(me)
+check("a closed tank sends nothing", len(LOG) == n or REAL)
+me.ui.panel, me.ui.tab = "shop", "mine"
+b = buttons(me)
+check("a closed tank still shows its code", "Open my tank" in b and "Copy" in b)
+b["Open my tank"][0]()
+buttons(me)["Sure? Open it"][0]()
+settle(me, lambda: s["online"]["open"])
+check("opening it again keeps the same code", s["online"]["id"] == tid and s["online"]["open"])
+fr.toasts.clear()
+fr.ui.panel, fr.ui.tab = "shop", "mine"
+buttons(fr)["Visit"][0]()
+settle(fr, lambda: fr.visit_id)
+check("and friends see the real thing again", fr.visit_id == tid)
+fr.leave_visit()
+me.save()
+check("the open or closed choice is saved", Game(save_path=me.save_path).state["online"]["open"] is True)
+me.stop_sharing()
+settle(me, lambda: not s["online"]["open"])
+me.save()
+check("closed is remembered too", Game(save_path=me.save_path).state["online"]["open"] is False)
+check("closed tanks don't reopen by themselves", not s["online"]["open"])
 fr.toasts.clear()
 fr.visit_online("100001" if not REAL else "999998")
 settle(fr)
-check("a code nobody has says so", not fr.visiting and any("no tank" in t[0] for t in fr.toasts))
+check("a code nobody has says so", not fr.visiting and any("no open tank" in t[0] for t in fr.toasts))
 
 # ---- reset also deletes
 a = new_game("Reset Me")
@@ -264,11 +297,16 @@ settle(a, lambda: a.state["online"])
 gone = a.state["online"]["id"]
 a.reset_save()
 settle(a)
-check("Fresh tank takes it off the server too", a.state["online"] is None)
+check("Fresh tank closes it and keeps the code", a.state["online"]["id"] == gone and not a.state["online"]["open"])
 fr.toasts.clear()
 fr.visit_online(gone)
 settle(fr)
-check("so that code stops working", not fr.visiting)
+check("so nobody can see it until it's opened", not fr.visiting)
+a.share_tank()
+settle(a, lambda: a.state["online"]["open"])
+check("and the fresh tank gets the same code", a.state["online"]["id"] == gone)
+a.stop_sharing()
+settle(a, lambda: not a.state["online"]["open"])
 
 if not REAL:
     # ---- a report
@@ -307,8 +345,8 @@ if not REAL:
     MODE[0] = "500"
     t.stop_sharing()
     settle(t)
-    check("if Stop sharing can't reach the server, you're told it's still shared", t.state["online"] == good
-          and any("still shared" in x[0] for x in t.toasts))
+    check("if Close can't reach the server, you're told it's still open", t.state["online"] == good
+          and any("still open" in x[0] for x in t.toasts))
     E.add_fish(t.state, "sunflower")
     t.sync_t = 0.0
     t.update(0.01)
@@ -349,5 +387,11 @@ if not REAL:
     g = Game(save_path=p)
     check("good ones stay", g.state["online"]["id"] == "123456" and "id" not in g.state["friends"][0]
           and g.state["friends"][1]["id"] == "654321")
+if REAL:                                 # closed tanks keep their codes, so give up the test ones
+    for who in (me, a):
+        mine = who.state["online"]
+        if mine:
+            who.online.send("forget", "DELETE", f"/v1/tanks/{mine['id']}", key=mine["key"])
+            settle(who)
 print("ALL PASS" if ok else "SOME FAILED")
 sys.exit(0 if ok else 1)
