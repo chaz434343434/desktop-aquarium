@@ -31,7 +31,12 @@ ditto "$APP" "out/dmg/Desktop Aquarium.app"
 ln -s /Applications out/dmg/Applications
 cp "build_assets/How to open on Mac.txt" out/dmg/
 cp "build_assets/How to play.txt" out/dmg/
-hdiutil create -volname "Desktop Aquarium" -srcfolder out/dmg -ov -format UDZO \
-  "out/Desktop.Aquarium.v$VER.Mac.$ARCH.dmg"
+# hdiutil sometimes says "Resource busy" on the build machines: wait a moment and try again
+for try in 1 2 3 4 5; do
+  hdiutil create -volname "Desktop Aquarium" -srcfolder out/dmg -ov -format UDZO \
+    "out/Desktop.Aquarium.v$VER.Mac.$ARCH.dmg" && break
+  [ "$try" = 5 ] && exit 1
+  sleep 20
+done
 rm -rf out/dmg
 ls -la out
