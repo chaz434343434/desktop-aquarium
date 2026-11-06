@@ -179,7 +179,7 @@ check("Whole Turkey is served", fe is not None and s["bubbles"] < before)
 check("it gives 2x scales", "double" in s["buffs"])
 g.serve_feast("pie")
 check("only one feast at a time", g.tank.feast is fe)
-for _ in range(100):
+for _ in range(150):         # 15 seconds: the slowest fish can take about 10 to cross a wide tank
     g.update(0.1)
 check("it sinks to the sand", fe["settled"])
 n0 = sum(1 for a in g.tank.fish.values() if abs(a.x - fe["x"]) < 42)
