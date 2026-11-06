@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.10.0)
+DESKTOP AQUARIUM  (version 1.11.0)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -55,8 +55,7 @@ WHEN YOU COME BACK
 
 HOLIDAY SPECIALS
   - Some things are only for sale during a holiday (by your computer's date). They have their
-    own tab in the Shop while the holiday is on. Afterwards, anything you bought is listed under
-    Past Events in the Shop, where you can buy it again any time.
+    own tab in the Shop while the holiday is on. Whatever you've got when it ends stays yours.
     Thanksgiving (November 3 - 30): the Turkey Catfish, the Harvest Cove theme, toys, upgrades
     and limited-edition feasts: a whole turkey sinks to the sand and every fish eats off it!
     Halloween (October 1 - November 2): the Haunted Lagoon theme, the Pumpkin Catfish,
@@ -66,14 +65,13 @@ HOLIDAY SPECIALS
     Its pop-bubbles are skulls worth 2x, and it gives +10% scales forever.
   - The Pumpkin Catfish earns twice as much as your best catfish and blows skull bubbles
     worth 3x. One per tank.
-  - Once you've bought them, they're yours: the theme stays, and the Pumpkin Catfish, toys and
-    upgrades can be bought again after a Spawning Season, any time of year.
+  - The theme stays yours for good. The catfish, toys and upgrades go at a Spawning Season like
+    everything else, and can be bought again when the holiday comes back.
 
 THE LONG GAME
-  - Shop > Bills: pay your tank's bills to earn pearls. Each bill costs real scales and more
-    than the last. Pay on time for a bonus pearl; being late never costs you anything.
-  - When you're ready, start a Spawning Season: you lose your fish and upgrades, collect your
-    pearls, and spend them on the Ring Tree (the Rings button). Its rings last forever.
+  - Shop > Spawning: once you've earned enough scales, start a Spawning Season. You lose your
+    fish and upgrades, collect pearls (the more you earned, the more you get), and spend them on
+    the Ring Tree (the Rings button). Its rings last forever.
   - The Ring Tree has six branches growing out from the Spring. You can only see a ring once
     you've bought the one before it, so buy one to find out where that branch goes. Drag to
     look around, scroll to zoom, and click a ring to see what it does.

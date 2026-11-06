@@ -1,4 +1,4 @@
-"""Headless checks for 1.8.0: Tank Bills + Rings replace the old pearl formula (old saves convert),
+"""Headless checks for 1.8.0: Rings replace the old pearl formula (old saves convert),
 more toys and upgrades, the Thanksgiving event and its feasts. Run: python test_v180.py [screenshot_dir]"""
 import json
 import os
@@ -11,7 +11,7 @@ os.environ["DA_DATE"] = "2026-11-05"
 import pygame  # noqa: E402
 
 from purrfin import economy as E, sprites  # noqa: E402
-from purrfin.data import TOYS, UPGRADES, FEASTS, FEASTS_BY_ID, PEARL_TREE, BILL_TIME  # noqa: E402
+from purrfin.data import TOYS, UPGRADES, FEASTS, FEASTS_BY_ID, PEARL_TREE  # noqa: E402
 from purrfin.game import Game  # noqa: E402
 
 pygame.init()
@@ -44,50 +44,29 @@ def shot(g, name, rect=None):
 # ---- the pearl problem
 g = new_game()
 s = g.state
+check("nothing to collect before you've earned enough", E.pearls_for(s) == 0)
 E.earn(s, 1e30)
-check("being rich alone gives no pearls any more (it gave 15,811,388 before)", E.pearls_for(s) == 0)
-first = E.bill_info(s)
-check("first bill is the Water Bill", first["name"] == "Water Bill")
-s["bubbles"] = first["cost"] * 3
-got = g.pay_bill()
-check("paying a bill spends real scales", abs(s["bubbles"] - first["cost"] * 2) < 1 and got)
-check("and earns pearls for the next spawn", E.pearls_for(s) >= 1 and s["pearls"] == 0)
-check("the next bill costs 6x more", abs(E.bill_info(s)["cost"] / first["cost"] - 6) < 1e-9)
-s["bubbles"] = 1e63
-g.pay_all_bills()
+at30 = E.pearls_for(s)
+check(f"1e30 scales pays a sensible {at30} pearls (it paid 15,811,388 once)", 40 < at30 < 120)
+E.earn(s, 1e63)
 total = E.pearls_for(s)
-check(f"paying every bill you can afford at 1e63 scales: a sensible {total} pearls", 300 < total < 1500)
-check("names keep going", "2" in E.bill_info(s, 25)["name"])
-s["bubbles"] = s["earned_run"] = 0.0
+check(f"1e63 scales pays a sensible {total} pearls", 300 < total < 1500)
+scales = s["bubbles"]
 before = s["pearls"]
 g.spawn()
 s = g.state
 check("Spawning Season collects them", s["pearls"] == before + total)
-check("and the bills start over", s["bills_paid"] == 0 and E.pearls_for(s) == 0)
+check("and the count starts over", s["earned_run"] == 0 and E.pearls_for(s) == 0)
 s["pearls"] = 0
 g.spawn()
-check("no spawning without paying a bill", g.state["spawns"] == 1)
-
-# ---- on-time bonus, no punishment
+check("no spawning before you've earned enough", g.state["spawns"] == 1)
 s = g.state
-s["tree"] = {}
-s["bubbles"] = 0.0
-E.tick_bills(s, 1)
-check("the on-time clock waits until you can afford the bill", s["bill_due"] is None)
-s["bubbles"] = 1e20
-check("a bill arrives once you can", E.tick_bills(s, 1) is not None and s["bill_due"] == BILL_TIME)
-b = E.bill_info(s)
-_, p1 = E.pay_bill(s)
-check("paid on time: the bonus", p1 == b["pearls"] + b["bonus"])
-E.tick_bills(s, 1)
-s["bill_due"] = 0.0
-b = E.bill_info(s)
-scales, fish = s["bubbles"], list(s["fish"])
-for _ in range(100):
-    E.tick_bills(s, 100)
-check("a late bill costs you nothing", s["bubbles"] == scales and s["fish"] == fish)
-_, p2 = E.pay_bill(s)
-check("it only misses the bonus", p2 == b["pearls"])
+s["earned_run"] = 0.99e17
+check("just under the line: nothing", E.pearls_for(s) == 0)
+s["earned_run"] = 1e17
+check("right on it: a handful", 3 <= E.pearls_for(s) <= 12)
+check("the next pearls are further along", E.next_pearls_at(s) > 1e17)
+s["earned_run"] = 0.0
 
 # ---- old saves convert
 d = tempfile.mkdtemp()
@@ -112,10 +91,12 @@ check("small pearl savings are left alone", Game(save_path=path).state["pearls"]
 # ---- rings
 g = new_game()
 s = g.state
-c0 = E.bill_info(s)["cost"]
+s["earned_run"] = 1e25
+p0 = E.pearls_for(s)
 s["tree"]["thrift"] = 2
-check("Thrift Ring: cheaper bills", abs(E.bill_info(s)["cost"] / c0 - 0.81) < 1e-9)
+check("Thrift Ring: spawning counts more scales", E.pearls_for(s) > p0)
 s["tree"] = {}
+s["earned_run"] = 0.0
 b0 = E.fish_boost(s)
 s["tree"]["fishring"] = 2
 check("Fish Ring: fish earn more", abs(E.fish_boost(s) / b0 - 2) < 1e-9)
@@ -223,8 +204,7 @@ g.serve_feast("pie")
 check("after Thanksgiving, no more feasts", g.tank.feast is None)
 fresh = E.new_state()
 check("and new players don't see the tab", E.active_seasons(fresh) == [])
-check("people who bought Thanksgiving things find it in Past Events", "thanksgiving" in E.past_seasons(s))
-check("and new players don't", E.past_seasons(fresh) == [])
+check("once it's over nobody gets a holiday tab", E.active_seasons(s) == [])
 check("but the feasts are gone from it", not E.season_items(s, "thanksgiving")["feasts"])
 print("ALL PASS" if ok else "SOME FAILED")
 sys.exit(0 if ok else 1)

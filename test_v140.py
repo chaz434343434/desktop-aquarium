@@ -149,13 +149,13 @@ fresh = E.new_state()
 check("off-season, a new player can't see the pumpkin", E.seasonal_fish_buyable(fresh, "pumpkin") == "season")
 check("off-season, a new player can't see the theme", not E.theme_visible(fresh, "haunted"))
 keep = E.new_state(keep=s)
-check("after Spawning Season the pumpkin can be bought again off-season",
-      E.seasonal_fish_buyable(keep, "pumpkin") == "ok")
+check("after Spawning Season the pumpkin is gone until Halloween",
+      E.seasonal_fish_buyable(keep, "pumpkin") == "season")
 check("and the theme is still yours", "haunted" in keep["themes"] and E.theme_visible(keep, "haunted"))
 n = len(s["fish"])
 g.sell_value = None
 s["fish"] = [f for f in s["fish"] if f["sp"] != "pumpkin"]
-check("the old owner can rebuy it off-season", E.seasonal_fish_buyable(s, "pumpkin") == "ok")
+check("nobody can rebuy it off-season", E.seasonal_fish_buyable(s, "pumpkin") == "season")
 g2 = Game(save_path=os.path.join(tempfile.mkdtemp(), "s.json"), fresh=True)
 g2.state["bubbles"] = 1e12
 g2.buy_species("pumpkin")

@@ -130,8 +130,8 @@ fresh = E.new_state()
 check("off-season, a new player can't see Halloween upgrades", not E.upgrade_visible(fresh, "spooky"))
 check("or buy Halloween toys", not E.seasonal_ok(fresh, {"id": "cauldron", "season": "halloween"}))
 keep = E.new_state(keep=s)
-check("after Spawning Season, ones you had can be bought again off-season",
-      E.upgrade_visible(keep, "spooky") and E.seasonal_ok(keep, E.TOYS_BY_ID["cauldron"]))
+check("after Spawning Season they're gone until the holiday comes back",
+      not E.upgrade_visible(keep, "spooky") and not E.seasonal_ok(keep, E.TOYS_BY_ID["cauldron"]))
 g2 = Game(save_path=os.path.join(tempfile.mkdtemp(), "s.json"), fresh=True)
 E.earn(g2.state, 1e15)
 g2.buy_toy("cauldron")

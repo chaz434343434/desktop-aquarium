@@ -77,15 +77,14 @@ check("buying from it works", E.toy_lv(s, "cauldron") == 1 and any(f["sp"] == "p
 os.environ["DA_DATE"] = "2026-12-01"
 _, tabs = listed(g, "fish")
 check("after Halloween the Halloween button is gone", "Halloween" not in tabs)
-check("people who bought Halloween things get Past Events instead", "Past Events" in tabs)
-rows, _ = listed(g, "past")
-check("but only shows what they had", set(rows) <= {"Witch's Cauldron", "Pumpkin Catfish"} | {r for r in rows if "Pumpkin" in r}
-      and "Candy Corn Pile" not in rows)
+check("there's no Past Events button", "Past Events" not in tabs)
+rows, _ = listed(g, "toys")
+check("a toy you still have is with the other toys", "Witch's Cauldron" in rows and "Candy Corn Pile" not in rows)
 g2 = Game(save_path=os.path.join(tempfile.mkdtemp(), "s.json"), fresh=True)
 g2.apply_window()
 g2.ui.panel, g2.ui.tab = "shop", "season:halloween"
 _, tabs = listed(g2, "season:halloween")
-check("a new player after Halloween has no Halloween tab", "Halloween" not in tabs and "Past Events" not in tabs)
+check("a new player after Halloween has no Halloween tab", "Halloween" not in tabs)
 check("and is sent back to the Catfish tab", g2.ui.tab == "fish")
 print("ALL PASS" if ok else "SOME FAILED")
 sys.exit(0 if ok else 1)

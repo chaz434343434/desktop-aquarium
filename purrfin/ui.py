@@ -220,7 +220,7 @@ class UI:
             self.rings.opened()
         self.confirm = None
 
-    def rings_to_bills(self):
+    def rings_to_spawn(self):
         self.panel, self.tab = "shop", "spawn"
         self.confirm = None
 
@@ -825,12 +825,9 @@ class UI:
             tabs = [("fish", "Catfish"), ("toys", "Toys"), ("upgrades", "Upgrades"), ("hatchery", "Hatchery"),
                     ("themes", "Themes")]
             tabs += [("season:" + se, SEASONS[se]["name"]) for se in seasons]
-            past = E.past_seasons(g.state)
-            if past:
-                tabs += [("past", "Past Events")]
-            tabs += [("mine", "My Tank"), ("spawn", "Bills")]
-            if (self.tab.startswith("season:") and self.tab[7:] not in seasons) or (self.tab == "past" and not past):
-                self.tab = "fish"                       # that holiday is over / nothing from past events
+            tabs += [("mine", "My Tank"), ("spawn", "Spawning")]
+            if self.tab.startswith("season:") and self.tab[7:] not in seasons:
+                self.tab = "fish"                       # that holiday is over
             room = rr.w - 10 - 44                       # stop short of the close button
             tab_font = self.f_norm
             for tab_font, pad, gap in ((self.f_norm, 22, 6), (self.f_norm, 14, 4), (self.f_norm, 10, 3), (self.f_norm, 7, 3),
@@ -847,16 +844,12 @@ class UI:
                     tab_y += 32
                 if key.startswith("season:"):
                     col = (232, 120, 30) if self.tab == key else (150, 74, 20)
-                elif key == "past":
-                    col = (140, 110, 210) if self.tab == key else (84, 66, 130)
                 else:
                     col = GOOD if self.tab == key else TAB
                 self.button(scr, (x, tab_y, tw, 30), lab, lambda k=key: self.set_tab(k), col=col, font=tab_font)
                 x += tw + gap
             if self.tab.startswith("season:"):
                 draw = self.tab_season
-            elif self.tab == "past":
-                draw = self.tab_past
             else:
                 draw = {"fish": self.tab_fish, "toys": self.tab_toys, "upgrades": self.tab_upgrades,
                         "mine": self.tab_mine, "spawn": self.tab_spawn, "hatchery": self.tab_hatchery,
@@ -874,7 +867,7 @@ class UI:
         top = 58 + (extra_rows if self.panel == "shop" else 0)
         view = pygame.Rect(rr.x + 6, rr.y + top, rr.w - 12, rr.h - top - 6)
         self.search_rect = None
-        if self.panel == "shop" and (self.tab in ("fish", "toys", "upgrades", "themes", "past") or self.tab.startswith("season:")):
+        if self.panel == "shop" and (self.tab in ("fish", "toys", "upgrades", "themes") or self.tab.startswith("season:")):
             self.draw_search(scr, pygame.Rect(view.x + 4, view.y, view.w - 16, 28))
             view = pygame.Rect(view.x, view.y + 34, view.w, view.h - 34)
         elif g.searching:
@@ -1062,7 +1055,7 @@ class UI:
             self.text(scr, f"Fish play with toys and shed scales. Total bonus +{int(E.toy_bonus(s) * 100)}%",
                       self.f_small, DIM, (view.x + 8, y + 2))
             y += 24
-        items = E.season_items(s, season)["toys"] if season else [t for t in TOYS if not t.get("season")]
+        items = E.season_items(s, season)["toys"] if season else [t for t in TOYS if E.regular_tab_item(t, E.toy_lv(s, t["id"]))]
         owned = [t for t in items if E.toy_lv(s, t["id"])]
         new = [t for t in items if not E.toy_lv(s, t["id"])]
         if not season:
@@ -1085,8 +1078,7 @@ class UI:
                           f"{t['desc']} Fish that play with it shed scales!", (255, 214, 90) if lv else DIM)]
                 lab = "MAX" if maxed else (("Buy " if lv == 0 else "Up ") + E.fmt(c))
                 if t.get("season") and not lv:
-                    when = "special!" if E.in_season(t["season"]) else "toy you've had."
-                    lines[0] = (f"{SEASONS[t['season']]['name']} {when}  +{t['bonus']}% scales per level", (255, 170, 80))
+                    lines[0] = (f"{SEASONS[t['season']]['name']} special!  +{t['bonus']}% scales per level", (255, 170, 80))
                 self.row(scr, view, y, sprites.toy_icon(t["id"], 2), t["name"], lines, lab,
                          lambda i=t["id"]: g.buy_toy(i), (not maxed) and g.can_afford(c),
                          tcol=(255, 170, 80) if t.get("season") else TEXT)
@@ -1191,7 +1183,7 @@ class UI:
         hidden = 0
         shown = []
         for u in UPGRADES:
-            if u.get("season") != season:
+            if u.get("season") != season if season else not E.regular_tab_item(u, E.ulv(s, u["id"])):
                 continue
             if not E.upgrade_visible(s, u["id"]):
                 hidden += 1
@@ -1269,7 +1261,8 @@ class UI:
                       (view.x + 8, y + 2))
             y += 24
         for th in THEMES:
-            if th.get("season") != season or not E.theme_visible(s, th["id"]):
+            here = th.get("season") == season if season else E.regular_tab_item(th, th["id"] in s["themes"])
+            if not here or not E.theme_visible(s, th["id"]):
                 continue
             if not self.match(th["name"], th["desc"]):
                 continue
@@ -1330,32 +1323,13 @@ class UI:
         season = self.tab[7:]
         name = SEASONS[season]["name"]
         y0 = y
-        msg = f"{name} specials! Only for sale around {name} - once you've had one, it's yours to buy again any time."
+        msg = f"{name} specials! Only for sale around {name}."
         for ln in self.wrap(msg, self.f_small, view.w - 30):
             self.text(scr, ln, self.f_small, (255, 190, 120), (view.x + 8, y + 2))
             y += 18
         y += 6
         used, found = self.season_sections(scr, view, y, season)
         y += used
-        y += self.no_matches(scr, view, y, found)
-        return y - y0
-
-    def tab_past(self, scr, view, y):
-        """the log: things from finished holidays this player has had, to use or buy again any time"""
-        g, s = self.g, self.g.state
-        y0 = y
-        msg = "Everything you've had from past events. Buy it again any time, even after a Spawning Season."
-        for ln in self.wrap(msg, self.f_small, view.w - 30):
-            self.text(scr, ln, self.f_small, (205, 190, 255), (view.x + 8, y + 2))
-            y += 18
-        y += 6
-        found = False
-        for season in E.past_seasons(s):
-            self.text(scr, SEASONS[season]["name"], self.f_big, ACC, (view.x + 8, y))
-            y += 30
-            used, any_found = self.season_sections(scr, view, y, season)
-            y += used
-            found = found or any_found
         y += self.no_matches(scr, view, y, found)
         return y - y0
 
@@ -1508,47 +1482,30 @@ class UI:
     def tab_spawn(self, scr, view, y):
         g, s = self.g, self.g.state
         y0 = y
-        lines = ("Pay your tank's bills to earn pearls. Then start a Spawning Season: release your tank into the "
-                 "river, collect the pearls and spend them on the Ring Tree, which lasts forever. You keep pearls, Rings, "
-                 "Fishdex, themes and shinies. Scales, fish, toys and upgrades reset.")
+        lines = ("Start a Spawning Season: release your tank into the river, collect pearls and spend them on the "
+                 "Ring Tree, which lasts forever. The more you've earned this season, the more pearls you get. You keep "
+                 "pearls, Rings, Fishdex, themes and shinies. Scales, fish, toys and upgrades reset.")
         for ln in self.wrap(lines, self.f_small, view.w - 30):
             self.text(scr, ln, self.f_small, TEXT, (view.x + 10, y))
             y += 17
         y += 8
-        # ---- the next bill
-        b = E.bill_info(s)
-        due = s.get("bill_due")
-        rr = pygame.Rect(view.x + 4, y, view.w - 16, 86)
-        self.box(scr, rr, BG2)
-        self.text(scr, f"Bill #{s.get('bills_paid', 0) + 1}: {b['name']}", self.f_norm, ACC, (rr.x + 12, rr.y + 8))
-        self.text(scr, f"Costs {E.fmt(b['cost'])} scales.  Worth {b['pearls']} pearl{'s' if b['pearls'] != 1 else ''}"
-                       f" (+{b['bonus']} if paid on time)", self.f_small, TEXT, (rr.x + 12, rr.y + 32))
-        if due is None:
-            note, col = "The on-time clock starts once you can afford it.", DIM
-        elif due > 0:
-            note, col = f"Pay within {E.fmt_time(due)} for the on-time bonus.", (170, 240, 170)
-        else:
-            note, col = "Late: no bonus, but no harm done. Pay it whenever you like.", (255, 190, 140)
-        self.text(scr, note, self.f_small, col, (rr.x + 12, rr.y + 54))
-        afford = g.can_afford(b["cost"])
-        self.button(scr, (rr.right - 130, rr.y + 8, 120, 32), "Pay", g.pay_bill, enabled=afford, col=GOOD)
-        self.button(scr, (rr.right - 130, rr.y + 46, 120, 30), "Pay all I can", g.pay_all_bills, enabled=afford,
-                    col=NAV, font=self.f_small)
-        y += 96
-        # ---- pearls and spawning
         p = E.pearls_for(s)
         scr.blit(sprites.pearl_icon(4), (view.x + 10, y))
         self.text(scr, f"Pearls to spend: {s['pearls']}   (seasons: {s['spawns']})", self.f_big, TEXT,
                   (view.x + 44, y))
         y += 34
-        self.text(scr, f"Bills paid this season: {s.get('bills_paid', 0)}", self.f_norm, DIM, (view.x + 10, y))
+        self.text(scr, f"Earned this season: {E.fmt(s['earned_run'])} scales", self.f_norm, DIM, (view.x + 10, y))
         y += 24
+        nxt = E.next_pearls_at(s)
         if p <= 0:
-            self.text(scr, "Pay a bill to be able to spawn.", self.f_norm, (255, 160, 160), (view.x + 10, y))
+            self.text(scr, f"You can spawn once you've earned {E.fmt(nxt)} this season.", self.f_norm, (255, 160, 160),
+                      (view.x + 10, y))
             y += 30
         else:
             self.text(scr, f"Spawning now collects +{p} pearls", self.f_norm, (200, 255, 200), (view.x + 10, y))
-            y += 30
+            y += 24
+            self.text(scr, f"More pearls at {E.fmt(nxt)} earned", self.f_small, DIM, (view.x + 10, y))
+            y += 24
             conf = self.confirm == ("spawn",)
 
             def cb():

@@ -34,7 +34,7 @@ save = os.path.join(tempfile.mkdtemp(), "save.json")
 PHOTO_DIR = tempfile.mkdtemp()
 g = Game(save_path=save, fresh=True)
 g.apply_window(first=True)
-TABS = ["fish", "toys", "upgrades", "hatchery", "themes", "mine", "spawn", "season:halloween", "season:thanksgiving", "past"]
+TABS = ["fish", "toys", "upgrades", "hatchery", "themes", "mine", "spawn", "season:halloween", "season:thanksgiving"]
 KEYS = [pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_BACKSPACE, pygame.K_a, pygame.K_TAB]
 
 
@@ -122,7 +122,6 @@ def action():
         g.start_event(rng.choice(["storm", "golden", "diver"]))
     elif a < 0.79:
         E.earn(s, 1e20)
-        rng.choice([g.pay_bill, g.pay_all_bills])()
         if rng.random() < 0.3:
             g.serve_feast(rng.choice(["pie", "platter", "roast"]))
     elif a < 0.80:

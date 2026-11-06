@@ -238,7 +238,7 @@ class RingTree:
         ui.text(scr, f"Found {found} of {total} rings", ui.f_small, (180, 170, 230), (x, rr.y + 17))
         bx = rr.right - 40
         ui.button(scr, (bx, rr.y + 8, 30, 30), "x", lambda: ui.open("rings"), col=(170, 60, 70))
-        for lab, cb, w in (("Bills", ui.rings_to_bills, 70), ("Fit", self.fit, 54),
+        for lab, cb, w in (("Spawning", ui.rings_to_spawn, 100), ("Fit", self.fit, 54),
                            ("+", lambda: self.zoom_by(-1), 30), ("-", lambda: self.zoom_by(1), 30)):
             bx -= w + 4
             ui.button(scr, (bx, rr.y + 8, w, 30), lab, cb, col=(70, 66, 120))
@@ -413,10 +413,10 @@ class RingTree:
                     y += 18
             y += 12
             if not s["pearls"]:
-                for ln in ui.wrap("Pearls come from paying Tank Bills and starting a Spawning Season.", ui.f_small, w):
+                for ln in ui.wrap("Pearls come from starting a Spawning Season, once you've earned enough scales.", ui.f_small, w):
                     ui.text(scr, ln, ui.f_small, (255, 220, 150), (x, y))
                     y += 18
-                ui.button(scr, (x, rr.bottom - 48, w, 36), "Go to Bills", ui.rings_to_bills, col=(120, 100, 190))
+                ui.button(scr, (x, rr.bottom - 48, w, 36), "Go to Spawning", ui.rings_to_spawn, col=(120, 100, 190))
             return
         n = PEARL_TREE_BY_ID[nid]
         branch = branch_of(nid)

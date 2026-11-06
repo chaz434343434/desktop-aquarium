@@ -67,7 +67,7 @@ def check_rows(g, where):
 
 for k in (1.0, 1.5, 2.0):
     g = setup(k)
-    for tab in ("fish", "toys", "upgrades", "hatchery", "themes", "mine", "spawn", "season:halloween", "season:thanksgiving", "past"):
+    for tab in ("fish", "toys", "upgrades", "hatchery", "themes", "mine", "spawn", "season:halloween", "season:thanksgiving"):
         g.ui.panel, g.ui.tab = "shop", tab
         check_rows(g, f"[{int(k * 100)}%] Shop > {tab}")
     for p in ("dex", "settings"):

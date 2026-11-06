@@ -915,7 +915,12 @@ RUB_EVERY = 0.07             # fastest rub payout (about 14 a second)      # sec
 SHINY_CHANCE = 0.04          # +0.5% per Lucky Moss level; shinies earn 2x
 
 # ---------------------------------------------------------------- prestige
-SPAWN_MIN = 1e17          # lifetime-this-run earnings needed to spawn
+# Earn scales in a season, then spawn to collect pearls. Every time your earnings grow PEARL_STEP times over
+# you're owed one more "step", and the steps pay 1, 1, 1, 1, 2, 2, 2, 2, 3... pearls. So pearls grow gently
+# however rich you get (at 1e30 scales about 70, at 1e63 about 600).
+SPAWN_MIN = 1e17          # earnings this season needed to spawn
+PEARL_BASE = 1e13
+PEARL_STEP = 6.0
 PEARL_BONUS = 0.10        # Golden Gills: +10% per level
 
 # ---------------------------------------------------------------- pearl tree
@@ -948,11 +953,11 @@ PEARL_TREE = [
     dict(id="deepjar", name="Jar Ring", max=5, cost=2, grow=1, req="lucky",
          desc="Jar holds +20 min, fills 10% faster"),
 ]
-PEARL_TREE += [  # newer rings, for keepers with plenty of paid bills behind them
+PEARL_TREE += [  # newer rings, for keepers with plenty of seasons behind them
     dict(id="thrift", name="Thrift Ring", max=5, cost=6, grow=4, req="gills",
-         desc="Bills cost 10% less per level"),
+         desc="Spawning counts your scales as 3x more, per level"),
     dict(id="early", name="Early Bird Ring", max=3, cost=8, grow=8, req="hatch",
-         desc="+1 pearl per level for bills paid on time"),
+         desc="+1 pearl per level at every Spawning Season"),
     dict(id="fishring", name="Fish Ring", max=10, cost=10, grow=6, req="headstart",
          desc="Fish earn +50% per level"),
     dict(id="bubblering", name="Bubble Ring", max=10, cost=10, grow=6, req="shiny",
@@ -965,16 +970,16 @@ PEARL_TREE += [  # 1.9: the tree grew. Mostly handy things rather than raw scale
          desc="Toys cost 4% less per level"),
     dict(id="giftbag", name="Gift Bag Ring", max=3, cost=6, grow=4, req="friends",
          desc="Visitor gifts are worth +50% more per level"),
-    dict(id="grace", name="Grace Ring", max=4, cost=5, grow=3, req="thrift",
-         desc="+5 minutes per level to pay a bill on time"),
+    dict(id="grace", name="Tide Ring", max=4, cost=5, grow=3, req="thrift",
+         desc="Spawning pays +5% more pearls per level"),
     dict(id="pearldiver", name="Pearl Diver Ring", max=3, cost=20, grow=20, req="grace",
-         desc="Every bill is worth +1 pearl per level"),
+         desc="Spawning pays +10% more pearls per level"),
     dict(id="nursery", name="Nursery Ring", max=5, cost=3, grow=2, req="fertile",
          desc="Hatching brings +20% more scales per level"),
     dict(id="yolk", name="Golden Yolk Ring", max=5, cost=4, grow=3, req="brood",
          desc="Golden Eggs are 25% likelier to hatch a shiny, per level"),
-    dict(id="prompt", name="Prompt Ring", max=3, cost=12, grow=12, req="early",
-         desc="Another +1 pearl per level for bills paid on time"),
+    dict(id="prompt", name="River Ring", max=3, cost=12, grow=12, req="early",
+         desc="Another +1 pearl per level at every Spawning Season"),
     dict(id="savings", name="Savings Ring", max=5, cost=6, grow=4, req="seasoned",
          desc="New seasons start with 10x more scales per level"),
     dict(id="buddy", name="Buddy Ring", max=3, cost=8, grow=6, req="keeptoys",
@@ -1014,16 +1019,5 @@ PEARL_TREE += [  # 1.9: the tree grew. Mostly handy things rather than raw scale
 ]
 PEARL_TREE_BY_ID = {n["id"]: n for n in PEARL_TREE}
 
-# ---------------------------------------------------------------- tank bills
-# Pay these (real scales!) to earn pearls, collected at your next Spawning Season.
-# Bill n costs BILL_BASE x BILL_GROWTH^n and is worth 1 + n // 4 pearls, so pearls grow gently
-# however rich you get. There's no penalty for being late: you only miss the early bonus.
-BILL_BASE = 1e13
-BILL_GROWTH = 6.0
-BILL_TIME = 1200              # seconds (while the game is open) to pay on time, once you can afford it
-BILL_NAMES = ["Water Bill", "Filter Rental", "Heater Power", "Sand Delivery", "Plant Food", "Vet Visit",
-              "Glass Cleaning", "Bubble Tax", "Tank Insurance", "Lighting Bill", "Pump Repair", "Fish School Fees",
-              "Whisker Trim", "Algae Removal", "Toy Repairs", "Reef Permit", "Scale Polish Bill", "River Tax",
-              "Ocean Rent", "Moon Tide Fee"]
 
 

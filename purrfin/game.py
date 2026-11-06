@@ -149,6 +149,11 @@ class Game:
             s["pearls"] = E.exchange_old_pearls(old)
             s["version"] = 3
             self.migrated = (old, s["pearls"], sum(s.get("tree", {}).values()))
+        if s.get("version", 1) < 4:          # v4: no more bills. Pearls waiting from paid bills are yours now.
+            s["pearls"] = s.get("pearls", 0) + int(s.get("bill_pearls", 0) or 0)
+            s["version"] = 4
+        for k in ("bill_pearls", "bills_paid", "bill_due"):
+            s.pop(k, None)
         s["fish"] = [f for f in s["fish"] if f.get("sp") in SPECIES_BY_ID]
         for f in s["fish"]:
             # fish renamed before name tags existed: any name that isn't a built-in default counts as named
@@ -156,7 +161,6 @@ class Game:
                 f["named"] = True
         if not s["fish"]:
             E.add_fish(s, "sunflower", "Sunny")
-        E.sync_event_log(s)
         share.clean_friends(s)
         return s
 
@@ -464,9 +468,6 @@ class Game:
             self.grew_up(f)
         self.test_hooks(dt)
         self.tick_events(dt)
-        b = E.tick_bills(s, dt)
-        if b:
-            self.toast(f"A bill arrived: {b['name']}. Pay it in Shop > Bills to earn pearls!", (210, 190, 255), 6)
         self.ambience.tick()
         if self.searching and self.ui.panel != "shop":      # shop closed: stop typing
             self.stop_search()
@@ -1456,31 +1457,6 @@ class Game:
                 self.toast(f"You found {len(new)} new ring{'s' if len(new) > 1 else ''}!", (230, 220, 255), 4)
             self.sounds.play("level", 0, self.now)
 
-    # ------------------------------------------------------------ tank bills
-    def pay_bill(self):
-        self.come_home()
-        got = E.pay_bill(self.state)
-        if not got:
-            return self.deny("Not enough scales for this bill yet.")
-        b, pearls = got
-        self.toast(f"{b['name']} paid! +{pearls} pearls at your next Spawning Season.", (210, 190, 255), 4)
-        self.sounds.play("buy", 0, self.now)
-        return got
-
-    def pay_all_bills(self):
-        self.come_home()
-        n = total = 0
-        while n < 500:
-            got = E.pay_bill(self.state)
-            if not got:
-                break
-            n += 1
-            total += got[1]
-        if not n:
-            return self.deny("Not enough scales for this bill yet.")
-        self.toast(f"Paid {n} bills! +{total} pearls at your next Spawning Season.", (210, 190, 255), 5)
-        self.sounds.play("level", 0, self.now)
-
     # ------------------------------------------------------------ limited-edition feasts
     def serve_feast(self, fid):
         self.come_home()
@@ -1544,7 +1520,6 @@ class Game:
         pearls = E.pearls_for(s)
         if pearls <= 0:
             return
-        pearls += 2 * E.tlv(s, "wish")
         keep = dict(s)
         keep["pearls"] = s["pearls"] + pearls
         keep["spawns"] = s["spawns"] + 1

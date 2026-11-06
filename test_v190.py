@@ -181,13 +181,14 @@ g.ui.button = orig
 check("the HUD has a Rings button once you have pearls", "Rings" in labels)
 g.ui.panel, g.ui.tab = "shop", "spawn"
 g.toasts.clear()
-s["bill_pearls"] = 3
+s["earned_run"] = 1e17
+owed = E.pearls_for(s)
 g.draw()
 g.draw()
 g.spawn()
 g.draw()
 check("a Spawning Season goes straight to the tree", g.ui.panel == "rings")
-check("and pays the pearls", g.state["pearls"] == 10)
+check("and pays the pearls", g.state["pearls"] == 7 + owed)
 
 # ---- every ring does something
 f = E.new_state()
@@ -204,15 +205,15 @@ FISH = next(sp["id"] for sp in E.SPECIES_BY_ID.values() if not sp.get("season") 
 FEAST = next(iter(__import__("purrfin.data", fromlist=["FEASTS"]).FEASTS))
 SHINY = next(x for x in f["fish"] if x.get("shiny"))
 PROBES = {
-    "bargain": lambda z: E.toy_cost(z, TOY), "giftbag": None, "grace": None,
-    "pearldiver": lambda z: E.bill_info(z)["pearls"], "nursery": lambda z: E.hatch_bonus(z), "yolk": None,
-    "prompt": lambda z: E.bill_info(z)["bonus"], "savings": None, "buddy": None,
+    "bargain": lambda z: E.toy_cost(z, TOY), "giftbag": None,
+    "pearldiver": lambda z: E.pearls_for(z), "grace": lambda z: E.pearls_for(z), "thrift": lambda z: E.next_pearls_at(z), "early": lambda z: E.pearls_for(z), "nursery": lambda z: E.hatch_bonus(z), "yolk": None,
+    "prompt": lambda z: E.pearls_for(z), "savings": None, "buddy": None,
     "growth": lambda z: E.passive_xp(z), "ocean": lambda z: E.capacity(z),
     "shimmer": lambda z: E.fish_rate(z, SHINY), "froth": lambda z: E.pop_interval(z),
     "overflow": lambda z: E.offline_terms(z), "tender": lambda z: E.drain_mult(z),
     "snack": lambda z: E.food_cost(z, FOOD), "pantry": lambda z: E.feast_cooldown(z, FEAST),
     "gentle": lambda z: E.hands_mult(z), "scratch": lambda z: E.rub_cooldown(z),
-    "longscratch": lambda z: E.rub_secs(z), "curious": None, "stargazer": lambda z: E.global_mult(z), "wish": None,
+    "longscratch": lambda z: E.rub_secs(z), "curious": None, "stargazer": lambda z: E.global_mult(z), "wish": lambda z: E.pearls_for(z),
     "hunter": lambda z: E.upgrade_cost(z, UP), "breeder": lambda z: E.species_cost(z, FISH),
 }
 for nid, fn in PROBES.items():
@@ -230,10 +231,11 @@ check("savings: a richer start", n["bubbles"] == 1000.0 * 100)
 check("buddy: extra catfish at the start", len(n["fish"]) == 3)
 check("wish: extra pearls, checked below", True)
 g = new_game()
+g.state["earned_run"] = 1e17
+plain = E.pearls_for(g.state)
 g.state["tree"] = {"wish": 2}
-g.state["bill_pearls"] = 1
 g.spawn()
-check("wish: +2 per level at a Spawning Season", g.state["pearls"] == 5)
+check("wish: +2 per level at a Spawning Season", g.state["pearls"] == plain + 4)
 
 # ---- small screen + big UI: every Shop tab stays on the panel and clear of the close button
 winutil.monitors = lambda: [dict(x=0, y=0, w=1024, h=720, primary=True)]
@@ -241,19 +243,17 @@ for k in (1.0, 1.5, 2.0):
     g = new_game()
     s = g.state
     s["settings"]["uiscale"] = k
-    s["seasonal_owned"] = ["cauldron"]
-    s["toys"]["cauldron"] = dict(lv=1, x=0.5)
     s["pearls"] = 5
     g.layout()
     g.apply_window()
-    g.ui.panel, g.ui.tab = "shop", "past"
+    g.ui.panel, g.ui.tab = "shop", "fish"
     rects = {}
     orig_button = g.ui.button
     g.ui.button = lambda scr, rect, label, *a, **kw: rects.__setitem__(label, pygame.Rect(rect)) or orig_button(scr, rect, label, *a, **kw)
     g.draw()
     g.draw()
     g.ui.button = orig_button
-    tabs = [rects[t] for t in ("Catfish", "Toys", "Upgrades", "Hatchery", "Themes", "Thanksgiving", "Past Events", "My Tank", "Bills")]
+    tabs = [rects[t] for t in ("Catfish", "Toys", "Upgrades", "Hatchery", "Themes", "Thanksgiving", "My Tank", "Spawning")]
     x = rects["x"]
     p = g.ui.panel_rect
     check(f"small screen at {int(k * 100)}%: tabs clear the close button", not any(t.colliderect(pygame.Rect(p.right - 40, p.y + 8, 30, 30)) for t in tabs))

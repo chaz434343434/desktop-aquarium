@@ -178,7 +178,7 @@ g.draw()
 s["friends"].pop()
 
 # ---- friends stay with you, and stay private
-s["bill_pearls"] = 1
+s["earned_run"] = 1e18
 keep = [dict(x) for x in s["friends"]]
 g.spawn()
 check("the list survives a Spawning Season", g.state["friends"] == keep)

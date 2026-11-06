@@ -5,13 +5,13 @@ import os
 import random
 import time
 
+from .data import SPAWN_MIN, PEARL_BASE, PEARL_STEP
 from .data import (SPECIES, SPECIES_BY_ID, FOODS_BY_ID, TOYS, TOYS_BY_ID, UPGRADES_BY_ID, CLUTCHES_BY_ID,
                    THEMES_BY_ID, SHINY_CHANCE, PEARL_TREE_BY_ID, GOLDEN_EGG_SHINY,
                    TANK_CAPACITY, TOY_LEVEL_GROWTH, COPY_GROWTH, FISH_NAMES,
-                   PEARL_BONUS, SEASONS, SEASONAL_BY_ID, RUB_BASE, RUB_COOLDOWN, BILL_BASE, BILL_GROWTH, BILL_TIME, BILL_NAMES,
-                   FEASTS)
+                   PEARL_BONUS, SEASONS, SEASONAL_BY_ID, RUB_BASE, RUB_COOLDOWN, FEASTS)
 
-SAVE_VERSION = 3
+SAVE_VERSION = 4
 
 
 def default_settings():
@@ -25,7 +25,7 @@ def new_state(keep=None):
         version=SAVE_VERSION, bubbles=0.0, earned_run=0.0, earned_total=0.0,
         pearls=0, spawns=0, fish=[], next_uid=1, upgrades={}, toys={}, dex=[], jar=0.0, eggs=[],
         themes=["classic"], theme="classic", shinies=[], tree={}, pending=[], spots={}, mystery=0, seasonal_owned=[],
-        bills_paid=0, bill_pearls=0, bill_due=None, friends=[],
+        friends=[],
         buffs={}, chill=False, settings=default_settings(), last_time=time.time(),
         stats=dict(pets=0, pops=0, fed=0, playtime=0.0),
     )
@@ -131,17 +131,17 @@ def in_season(season, day=None):
 
 
 def seasonal_fish_buyable(s, sp_id):
-    """'ok' | 'owned' (one per tank) | 'season' (not its season and you never had one)"""
+    """'ok' | 'owned' (one per tank) | 'season' (not its season)"""
     sp = SEASONAL_BY_ID[sp_id]
     if owned_count(s, sp_id):
         return "owned"
-    if in_season(sp["season"]) or sp_id in s.get("seasonal_owned", []):
+    if in_season(sp["season"]):
         return "ok"
     return "season"
 
 
 def season_items(s, season):
-    """everything of one holiday the player can see right now: in season, or owned before"""
+    """everything of one holiday for sale right now"""
     from .data import SEASONAL_SPECIES, THEMES, TOYS, UPGRADES
     return dict(
         feasts=[f for f in FEASTS if f["season"] == season and in_season(season)],
@@ -157,29 +157,9 @@ def active_seasons(s):
     return [se for se in SEASONS if in_season(se) and any(season_items(s, se).values())]
 
 
-def past_seasons(s):
-    """finished holidays this player has something from (the Past Events tab). Empty for everyone else."""
-    return [se for se in SEASONS if not in_season(se) and any(season_items(s, se).values())]
-
-
-def sync_event_log(s):
-    """the log of holiday things a player has had (seasonal_owned): anything on the save goes in it,
-    including things bought before the log covered them. Kept through Spawning Season."""
-    log = s.setdefault("seasonal_owned", [])
-    have = [f["sp"] for f in s.get("fish", []) if f.get("sp") in SEASONAL_BY_ID]
-    have += [f["sp"] for f in s.get("pending", []) if f.get("sp") in SEASONAL_BY_ID]
-    have += [t for t in s.get("toys", {}) if TOYS_BY_ID.get(t, {}).get("season")]
-    have += [u for u, lv in s.get("upgrades", {}).items() if lv and UPGRADES_BY_ID.get(u, {}).get("season")]
-    have += [t for t in s.get("themes", []) if THEMES_BY_ID.get(t, {}).get("season")]
-    for item in have:
-        if item not in log:
-            log.append(item)
-
-
 def theme_visible(s, tid):
     th = THEMES_BY_ID[tid]
-    return (not th.get("season") or tid in s.get("themes", []) or tid in s.get("seasonal_owned", [])
-            or in_season(th["season"]))
+    return not th.get("season") or tid in s.get("themes", []) or in_season(th["season"])
 
 
 def theme_cost(s, tid):
@@ -252,9 +232,14 @@ def upgrade_cost(s, uid):
 
 
 def seasonal_ok(s, item):
-    """seasonal toy/upgrade: for sale in its season, or any time once you've owned one"""
-    return (not item.get("season") or in_season(item["season"])
-            or item["id"] in s.get("seasonal_owned", []))
+    """seasonal toy/upgrade: for sale in its season. One you have now can still be levelled up after it."""
+    return (not item.get("season") or in_season(item["season"]) or toy_lv(s, item["id"]) > 0
+            or ulv(s, item["id"]) > 0)
+
+
+def regular_tab_item(item, level):
+    """holiday things you still have show up with everything else once the holiday's over"""
+    return not item.get("season") or (level > 0 and not in_season(item["season"]))
 
 
 def remember_seasonal(s, item):
@@ -659,50 +644,27 @@ def offline_terms(s):
     return pct, hours
 
 
+def pearl_steps(earned):
+    """how many steps of the pearl ladder these earnings have climbed"""
+    if earned < SPAWN_MIN:
+        return 0
+    return int(math.log(earned / PEARL_BASE, PEARL_STEP)) + 1
+
+
 def pearls_for(s):
-    """pearls collected if you spawn now: what the bills you've paid this season were worth"""
-    return s.get("bill_pearls", 0)
+    """pearls collected if you spawn now, from what you've earned this season"""
+    steps = pearl_steps(s["earned_run"] * 3 ** tlv(s, "thrift"))
+    if not steps:
+        return 0
+    p = sum(1 + n // 4 for n in range(steps)) + tlv(s, "early") + tlv(s, "prompt") + 2 * tlv(s, "wish")
+    return int(p * (1 + 0.05 * tlv(s, "grace") + 0.1 * tlv(s, "pearldiver")))
 
 
-# ---------------------------------------------------------------- tank bills
-def bill_info(s, n=None):
-    """the next bill: name, cost and pearls (plus the on-time bonus)"""
-    n = s.get("bills_paid", 0) if n is None else n
-    round_no = n // len(BILL_NAMES)
-    name = BILL_NAMES[n % len(BILL_NAMES)] + (f" {round_no + 1}" if round_no else "")
-    try:
-        cost = BILL_BASE * BILL_GROWTH ** n * 0.9 ** tlv(s, "thrift")
-    except OverflowError:
-        cost = float("inf")
-    return dict(name=name, cost=cost, pearls=1 + n // 4 + tlv(s, "pearldiver"),
-                bonus=1 + tlv(s, "early") + tlv(s, "prompt"))
-
-
-def tick_bills(s, dt):
-    """the on-time clock starts when you can afford the bill, and only runs while the game is open.
-    Returns the bill if one has just arrived."""
-    b = bill_info(s)
-    if s.get("bill_due") is None:
-        if s["bubbles"] >= b["cost"]:
-            s["bill_due"] = float(BILL_TIME + 300 * tlv(s, "grace"))
-            return b
-        return None
-    s["bill_due"] = max(0.0, s["bill_due"] - dt)
-    return None
-
-
-def pay_bill(s):
-    """pay the next bill if you can. Returns (bill, pearls earned) or None."""
-    b = bill_info(s)
-    if s["bubbles"] < b["cost"]:
-        return None
-    s["bubbles"] -= b["cost"]
-    due = s.get("bill_due")
-    pearls = b["pearls"] + (b["bonus"] if due is None or due > 0 else 0)
-    s["bill_pearls"] = s.get("bill_pearls", 0) + pearls
-    s["bills_paid"] = s.get("bills_paid", 0) + 1
-    s["bill_due"] = None
-    return b, pearls
+def next_pearls_at(s):
+    """earnings this season where the next pearls come in"""
+    k = 3 ** tlv(s, "thrift")
+    steps = pearl_steps(s["earned_run"] * k)
+    return SPAWN_MIN / k if not steps else PEARL_BASE * PEARL_STEP ** steps / k
 
 
 def exchange_old_pearls(p):
