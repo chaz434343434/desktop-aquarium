@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.9.0)
+DESKTOP AQUARIUM  (version 1.10.0)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -30,6 +30,9 @@ MAKE IT YOURS (Shop > My Tank)
   - Take photo: saves a picture in your Pictures folder (Desktop Aquarium).
   - Copy tank code: send it to a friend. They copy it and press Visit a tank to look at
     your tank (just looking - it doesn't change anything in their game).
+  - While visiting, press Save friend to keep that tank under Shop > My Tank, so you can visit
+    it again without the code. It shows the tank as it was when the code was copied. When they
+    send a newer code, copy it and press New code next to their name.
   - Options > Calm sounds: soft water, or water + gentle music.
 
 SURPRISES

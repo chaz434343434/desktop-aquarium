@@ -1,4 +1,6 @@
 """Hi-res UI: HUD strip, panels (shop / fishdex / options), tooltips, toasts."""
+import time
+
 import pygame
 
 from . import economy as E
@@ -334,15 +336,28 @@ class UI:
         name = vs.get("tank_name") or "a friend's tank"
         h = 34
         rr = pygame.Rect(r.x + 4, r.y - h - 6, r.w - 8, h)
-        room = rr.w - 210
+        kind, saved = g.friend_for_visit()
+        room = rr.w - 210 - (0 if kind == "saved" else 130)
         for lab in (f"Visiting {name}  -  {len(vs['fish'])} fish   (just looking: nothing here changes your game)",
                     f"Visiting {name}  -  {len(vs['fish'])} fish  (just looking)",
                     f"Visiting {name}", name):
             if self.f_small.size(lab)[0] <= room:
                 break
         self.box(scr, rr, BG)
-        self.text(scr, lab, self.f_small, TEXT, (rr.x + 12, rr.centery + 1), "midleft")
+        self.text(scr, self.clip_text(lab, self.f_small, room), self.f_small, TEXT, (rr.x + 12, rr.centery + 1), "midleft")
         self.button(scr, (rr.right - 190, rr.y + 3, 184, 28), "Back to my tank", g.leave_visit, col=GOOD)
+        if kind != "saved":
+            self.button(scr, (rr.right - 316, rr.y + 3, 120, 28), "Save friend" if kind == "new" else "Update friend",
+                        g.save_friend, col=NAV, font=self.f_small,
+                        tip=["Save this tank", "Visit it again any time from", "Shop > My Tank"] if kind == "new"
+                        else [f"Update {saved['name']}", "Keep this newer tank instead", "of the one you saved"])
+
+    def clip_text(self, text, font, room):
+        if font.size(text)[0] <= room:
+            return text
+        while text and font.size(text + "...")[0] > room:
+            text = text[:-1]
+        return text + "..."
 
     def draw_food_drag(self, scr):
         g = self.g
@@ -388,6 +403,49 @@ class UI:
             lx += w + 6
         y += 38
         return y - y0
+
+    def friends_section(self, scr, view, y):
+        """saved tanks: visit again, swap in a newer code, rename, remove"""
+        g, s = self.g, self.g.state
+        y0 = y
+        x = view.x + 8
+        friends = s["friends"]
+        self.text(scr, f"Friends' tanks ({len(friends)})" if friends else "Friends' tanks", self.f_norm, ACC, (x, y + 4))
+        y += 26
+        note = ("Each one shows the tank as it was when your friend copied the code. Ask them for a new one to see it now."
+                if friends else "Visit a friend's tank and press Save friend to keep it here.")
+        for ln in self.wrap(note, self.f_small, view.w - 30):
+            self.text(scr, ln, self.f_small, DIM, (x, y))
+            y += 17
+        y += 6
+        for f in list(friends):
+            rr = pygame.Rect(view.x + 4, y, view.w - 14, 46)
+            self.box(scr, rr, BG2)
+            bx = rr.right - 8
+            sure = self.confirm == ("friend", id(f))
+
+            def remove(f=f, sure=sure):
+                if sure:
+                    self.confirm = None
+                    g.remove_friend(f)
+                else:
+                    self.confirm = ("friend", id(f))
+            for lab, cb, col, tip in (("Sure?" if sure else "Remove", remove, BAD if sure else NAV, None),
+                                      ("Rename", lambda f=f: g.rename_friend(f), NAV, None),
+                                      ("New code", lambda f=f: g.friend_new_code(f), NAV,
+                                       ["They sent a newer code?", "Copy it, then press this"]),
+                                      ("Visit", lambda f=f: g.visit_friend(f), GOOD, None)):
+                w = self.f_small.size(lab)[0] + 16
+                bx -= w
+                self.button(scr, (bx, rr.y + 9, w, 28), lab, cb, col=col, font=self.f_small, tip=tip)
+                bx -= 4
+            room = bx - rr.x - 18
+            self.text(scr, self.clip_text(f["name"], self.f_norm, room), self.f_norm, TEXT, (rr.x + 10, rr.y + 5))
+            when = time.strftime("%b %d", time.localtime(f["saved"])) if f["saved"] else "?"
+            self.text(scr, self.clip_text(f"{f['fish']} fish  -  from {when}", self.f_small, room), self.f_small, DIM,
+                      (rr.x + 10, rr.y + 26))
+            y += 50
+        return y - y0 + 8
 
     def minimize(self):
         self.g.minimized = True
@@ -642,7 +700,7 @@ class UI:
         rr = pygame.Rect(r.centerx - w // 2, self.hud_top() - 8 - h, w, h)
         rr.clamp_ip(scr.get_rect())
         self.box(scr, rr, BG)
-        title = "Name your tank" if f.get("_tank") else f"Name your {SPECIES_BY_ID[f['sp']]['name']}"
+        title = "Name this friend" if f.get("_friend") else "Name your tank" if f.get("_tank") else f"Name your {SPECIES_BY_ID[f['sp']]['name']}"
         self.text(scr, title, self.f_norm, ACC, (rr.centerx, rr.y + 12), "midtop")
         box = pygame.Rect(rr.x + 30, rr.y + 42, rr.w - 60, 36)
         self.box(scr, box, (18, 22, 36), bevel=False)
@@ -1166,6 +1224,7 @@ class UI:
         g, s = self.g, self.g.state
         y0 = y
         y += self.tank_tools(scr, view, y)
+        y += self.friends_section(scr, view, y)
         gm = E.fish_mult(s)
         for f in sorted(s["fish"], key=lambda f: -E.fish_rate(s, f)):
             sp = SPECIES_BY_ID[f["sp"]]

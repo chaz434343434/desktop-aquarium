@@ -11,6 +11,8 @@ from .data import SPECIES_BY_ID, TOYS_BY_ID, THEMES_BY_ID, TOY_MAX_LEVEL
 PREFIX = "DA1:"
 MAX_FISH = 80
 MAX_NAME = 22
+MAX_FRIENDS = 30
+MAX_CODE = 20000
 
 
 def encode(s):
@@ -37,19 +39,27 @@ def _int(v, lo, hi, default):
         return default
 
 
-def decode(text, settings):
-    """a code (anywhere in the text) -> a tank you can look at. Raises ValueError if there isn't a good one."""
+def _body(text):
+    """just the code part of some pasted text"""
     i = (text or "").find(PREFIX)
     if i < 0:
         raise ValueError("no tank code")
     body = ""
-    for ch in text[i + len(PREFIX):i + len(PREFIX) + 20000]:
+    for ch in text[i + len(PREFIX):i + len(PREFIX) + MAX_CODE]:
         if ch.isalnum() or ch in "-_":
             body += ch
         elif ch in " \r\n\t":
             continue
         else:
             break
+    return body
+
+
+def _unpack(text):
+    """(the tank's data, just the bytes that held it). Words pasted after the code get ignored."""
+    body = _body(text)
+    if len(body) % 4 == 1:                 # a stray extra letter can never be part of a real code
+        body = body[:-1]
     try:
         packed = base64.urlsafe_b64decode(body + "=" * (-len(body) % 4))
         dec = zlib.decompressobj()
@@ -57,6 +67,31 @@ def decode(text, settings):
         d = json.loads(raw.decode("utf-8"))
     except Exception:
         raise ValueError("damaged tank code")
+    return d, packed[:len(packed) - len(dec.unused_data)]
+
+
+def clean_code(text):
+    """the code on its own, exactly as encode() wrote it, so the same tank always matches itself"""
+    _, used = _unpack(text)
+    return PREFIX + base64.urlsafe_b64encode(used).decode("ascii").rstrip("=")
+
+
+def clean_friends(s):
+    """the saved friends list as it comes out of a save file: keep only what looks right"""
+    good = []
+    raw = s.get("friends")
+    for f in raw if isinstance(raw, list) else []:
+        if not (isinstance(f, dict) and isinstance(f.get("code"), str) and f["code"].startswith(PREFIX)
+                and len(f["code"]) <= MAX_CODE + len(PREFIX)):
+            continue
+        good.append(dict(name=_clean_name(f.get("name", "")) or "Friend", tank=_clean_name(f.get("tank", "")),
+                         code=f["code"], fish=_int(f.get("fish"), 0, MAX_FISH, 0), saved=_int(f.get("saved"), 0, 2 ** 40, 0)))
+    s["friends"] = good[:MAX_FRIENDS]
+
+
+def decode(text, settings):
+    """a code (anywhere in the text) -> a tank you can look at. Raises ValueError if there isn't a good one."""
+    d, _ = _unpack(text)
     if not isinstance(d, dict) or not isinstance(d.get("f"), list):
         raise ValueError("not a tank code")
     vs = E.new_state()

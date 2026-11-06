@@ -89,6 +89,7 @@ class Game:
         self.event_t = random.uniform(*EVENT_FIRST)
         self.food_drag = None     # [food id, screen pos] while dragging a food from its button
         self.visiting = None      # a friend's tank (state dict) while visiting it
+        self.visit_code = None    # the code of the tank being visited
         self.my_tank = None
         self.rename_text = ""
         self.prev_fg = None
@@ -156,6 +157,7 @@ class Game:
         if not s["fish"]:
             E.add_fish(s, "sunflower", "Sunny")
         E.sync_event_log(s)
+        share.clean_friends(s)
         return s
 
     @staticmethod
@@ -1136,6 +1138,7 @@ class Game:
             return self.deny("Copy a friend's tank code first (it starts with DA1:), then press Visit.")
         if self.visiting:
             self.leave_visit()
+        self.visit_code = share.clean_code(text)
         self.ui.panel = None
         self.my_tank = self.tank
         t = Tank(self, self.tank_rect.w // self.S)
@@ -1160,11 +1163,71 @@ class Game:
         if not self.visiting:
             return
         self.visiting = None
+        self.visit_code = None
         self.tank = self.my_tank
         self.my_tank = None
         if self.tank.w != self.tank_rect.w // self.S:
             self.tank.resize(self.tank_rect.w // self.S)
         self.tank.sync()
+
+    # ---- the saved friends list. A saved tank is a snapshot: how it looked when the code was copied.
+    def friend_for_visit(self):
+        """(what the banner offers, the saved friend it's about): 'saved', 'update' or 'new'"""
+        friends = self.state["friends"]
+        for f in friends:
+            if f["code"] == self.visit_code:
+                return "saved", f
+        name = self.visiting.get("tank_name")
+        for f in friends:
+            if name and f["tank"] == name:
+                return "update", f
+        return "new", None
+
+    def save_friend(self):
+        if not self.visiting:
+            return
+        friends = self.state["friends"]
+        kind, f = self.friend_for_visit()
+        vs = self.visiting
+        if kind == "saved":
+            return
+        if kind == "update":
+            f.update(code=self.visit_code, fish=len(vs["fish"]), saved=int(time.time()))
+            return self.toast(f"Updated {f['name']} with this newer tank.", (150, 230, 160), 4)
+        if len(friends) >= share.MAX_FRIENDS:
+            return self.deny(f"Your friends list is full ({share.MAX_FRIENDS}). Remove someone first.")
+        name = vs.get("tank_name")
+        if not name:
+            taken = {x["name"] for x in friends}
+            name = next(f"Friend {i}" for i in range(1, share.MAX_FRIENDS + 2) if f"Friend {i}" not in taken)
+        friends.append(dict(name=name, tank=vs.get("tank_name", ""), code=self.visit_code, fish=len(vs["fish"]),
+                            saved=int(time.time())))
+        self.toast(f"Saved {name}! Find them under Shop > My Tank.", (150, 230, 160), 5)
+        self.sounds.play("buy", 0, self.now)
+
+    def visit_friend(self, f):
+        return self.visit(f["code"])
+
+    def friend_new_code(self, f):
+        """they sent a newer code: copy it, press New code"""
+        text = winutil.get_clipboard()
+        try:
+            vs = share.decode(text, self.state["settings"])
+        except ValueError:
+            return self.deny(f"Copy {f['name']}'s newest tank code first, then press New code.")
+        code = share.clean_code(text)
+        if code == f["code"]:
+            return self.toast(f"That's the code you already have for {f['name']}.", (200, 200, 230), 4)
+        f.update(code=code, tank=vs["tank_name"], fish=len(vs["fish"]), saved=int(time.time()))
+        self.toast(f"Updated {f['name']}'s tank!", (150, 230, 160), 4)
+        self.sounds.play("buy", 0, self.now)
+
+    def remove_friend(self, f):
+        self.state["friends"] = [x for x in self.state["friends"] if x is not f]
+        self.toast(f"Removed {f['name']}.", (200, 200, 230), 3)
+
+    def rename_friend(self, f):
+        self.start_rename({"_friend": f, "name": f["name"], "named": False})
 
     def start_tank_name(self):
         name = self.state.get("tank_name", "")
@@ -1189,6 +1252,10 @@ class Game:
                 self.state["tank_name"] = name
                 self.toast(f"Your tank is now called {name}!" if name else "Tank name removed.", (150, 230, 160), 3)
             name, save = "", False                 # nothing else to do for a fish
+        if f.get("_friend"):
+            if save and name:
+                f["_friend"]["name"] = name
+            name, save = "", False
         if save and name:
             f["name"] = name
             f["named"] = True

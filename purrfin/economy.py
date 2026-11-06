@@ -25,13 +25,13 @@ def new_state(keep=None):
         version=SAVE_VERSION, bubbles=0.0, earned_run=0.0, earned_total=0.0,
         pearls=0, spawns=0, fish=[], next_uid=1, upgrades={}, toys={}, dex=[], jar=0.0, eggs=[],
         themes=["classic"], theme="classic", shinies=[], tree={}, pending=[], spots={}, mystery=0, seasonal_owned=[],
-        bills_paid=0, bill_pearls=0, bill_due=None,
+        bills_paid=0, bill_pearls=0, bill_due=None, friends=[],
         buffs={}, chill=False, settings=default_settings(), last_time=time.time(),
         stats=dict(pets=0, pops=0, fed=0, playtime=0.0),
     )
     if keep:
         for k in ("pearls", "spawns", "dex", "settings", "stats", "earned_total", "themes", "theme", "shinies",
-                  "tree", "spots", "mystery", "seasonal_owned", "tank_name"):
+                  "tree", "spots", "mystery", "seasonal_owned", "tank_name", "friends"):
             if k in keep:
                 s[k] = keep[k]
         # pearl tree perks that shape a new season
