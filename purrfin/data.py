@@ -894,13 +894,13 @@ HARVEST_POP_MULT = 1.5       # and worth this much in Harvest Cove
 # cost_secs = price in seconds of income; bites = how many bites it lasts; bite_secs = scales per bite,
 # in seconds of income; cooldown in seconds. full/happy/xp apply to the fish taking the bite.
 FEASTS = [
-    dict(id="pie", name="Pumpkin Pie", season="thanksgiving", cost_secs=120, min=500, bites=20, bite_secs=9,
+    dict(id="pie", name="Pumpkin Pie", season="thanksgiving", cost_secs=90, min=375, bites=20, bite_secs=9,
          cooldown=180, full=30, happy=25, xp=20, sink=7, color=(226, 130, 40),
          desc="A whole pie, shared by the tank. Fish get happy and full."),
-    dict(id="platter", name="Harvest Platter", season="thanksgiving", cost_secs=300, min=2000, bites=30, bite_secs=13,
+    dict(id="platter", name="Harvest Platter", season="thanksgiving", cost_secs=225, min=1500, bites=30, bite_secs=13,
          cooldown=360, full=35, happy=30, xp=40, sink=6, color=(200, 170, 70),
          desc="Corn, squash and all the sides. Lots of XP for everyone."),
-    dict(id="roast", name="Whole Turkey", season="thanksgiving", cost_secs=900, min=10000, bites=45, bite_secs=26,
+    dict(id="roast", name="Whole Turkey", season="thanksgiving", cost_secs=675, min=7500, bites=45, bite_secs=26,
          cooldown=900, full=60, happy=50, xp=90, sink=5, color=(170, 100, 50), buff=("double", 300),
          desc="The big one! Sinks to the sand and everyone digs in. 2x scales for 5 minutes."),
 ]

@@ -151,6 +151,9 @@ check("Second Helpings: more bites", E.feast_bites(s, FEASTS_BY_ID["roast"]) > F
 check("Gravy Boat: back sooner", E.feast_cooldown(s, FEASTS_BY_ID["roast"]) < FEASTS_BY_ID["roast"]["cooldown"])
 
 # ---- the big meal
+check("feast prices: 90s, 225s and 675s of income",
+      [(FEASTS_BY_ID[i]["cost_secs"], FEASTS_BY_ID[i]["min"]) for i in ("pie", "platter", "roast")]
+      == [(90, 375), (225, 1500), (675, 7500)])
 g.toasts.clear()
 s["fish"][0]["full"] = 10.0
 before = s["bubbles"]
