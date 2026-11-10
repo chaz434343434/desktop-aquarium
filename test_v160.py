@@ -23,9 +23,9 @@ def check(name, cond):
     ok &= bool(cond)
 
 
-check("106 catfish", len(SPECIES) == 106)
+check("110 catfish", len(SPECIES) == 110)
 ids = [sp["id"] for sp in SPECIES]
-check("all different", len(set(ids)) == 106 and len({sp["name"] for sp in SPECIES}) == 106)
+check("all different", len(set(ids)) == 110 and len({sp["name"] for sp in SPECIES}) == 110)
 check("no catfish shares an id with an upgrade", not (set(ids) & set(UPGRADES_BY_ID)))
 check("the last one is the Infinity Catfish", SPECIES[-1]["name"] == "Infinity Catfish")
 costs = [sp["cost"] for sp in SPECIES]

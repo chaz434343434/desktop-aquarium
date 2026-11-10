@@ -27,8 +27,8 @@ def check(name, cond):
 
 
 # ---- the new fish
-NEW = ["neonglow", "opal", "sunriseglow", "candy", "stardust", "novaburst"]
-check("six new catfish", all(n in SPECIES_BY_ID for n in NEW) and len(SPECIES) == 106)
+NEW = ["neonglow", "opal", "sunriseglow", "candy", "stardust", "novaburst", "bubblegum", "firefly", "lagoon", "spectrum"]
+check("ten new catfish", all(n in SPECIES_BY_ID for n in NEW) and len(SPECIES) == 110)
 for n in NEW:
     sp = SPECIES_BY_ID[n]
     check(f"{sp['name']} costs Ud-ish money ({E.fmt(sp['cost'])})", 1e36 <= sp["cost"] < 1e39)
@@ -37,8 +37,20 @@ check("the old fish kept their prices", abs(SPECIES_BY_ID["vampire"]["cost"] / 1
       and abs(SPECIES_BY_ID["piraiba"]["cost"] / 1.0e39 - 1) < 0.05)
 check("everything is still in price order", all(a["cost"] < b["cost"] for a, b in zip(SPECIES[1:], SPECIES[2:])))
 check("and earns in order", all(a["rate"] < b["rate"] for a, b in zip(SPECIES, SPECIES[1:])))
-check("names and ids are all different", len({sp["id"] for sp in SPECIES}) == 106 and len({sp["name"] for sp in SPECIES}) == 106)
-check("tiers are just their places in the list", [sp["tier"] for sp in SPECIES] == list(range(106)))
+check("names and ids are all different", len({sp["id"] for sp in SPECIES}) == 110 and len({sp["name"] for sp in SPECIES}) == 110)
+check("tiers are just their places in the list", [sp["tier"] for sp in SPECIES] == list(range(110)))
+spec = sprites.fish_frames("spectrum")[(True, False)][0]
+hues = []
+for x in range(spec.get_width()):
+    r, g_, b, a = spec.get_at((x, spec.get_height() // 2))
+    h_ = __import__("colorsys").rgb_to_hsv(r / 255, g_ / 255, b / 255)
+    if a > 200 and max(r, g_, b) > 200 and h_[1] > 0.5:       # skip the white eye and sparkles
+        hues.append(__import__("colorsys").rgb_to_hsv(r / 255, g_ / 255, b / 255))
+check(f"Spectrum is very bright ({min(h[2] for h in hues):.2f} lowest brightness along its middle)", min(h[2] for h in hues) > 0.95)
+steps = [abs(a[0] - b[0]) for a, b in zip(hues, hues[1:])]
+check(f"and shades smoothly (biggest jump between pixels {max(min(s, 1 - s) for s in steps):.2f} of the colour wheel)",
+      max(min(s, 1 - s) for s in steps) < 0.12)
+check("through the whole rainbow", max(h[0] for h in hues) - min(h[0] for h in hues) > 0.6)
 for n in NEW:
     for fr in sprites.fish_frames(n).values():
         pass

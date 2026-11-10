@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.16.0)
+DESKTOP AQUARIUM  (version 1.17.0)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -85,7 +85,7 @@ THE LONG GAME
   - The Ring Tree has six branches growing out from the Spring. You can only see a ring once
     you've bought the one before it, so buy one to find out where that branch goes. Drag to
     look around, scroll to zoom, and click a ring to see what it does.
-  - There are 106 catfish to collect, including the Blue Channel Catfish, drawn by a friend.
+  - There are 110 catfish to collect, including the Blue Channel Catfish, drawn by a friend.
     The last one is the Infinity Catfish. Prices count up through names like Dc (decillion),
     Vg (vigintillion), Tg (trigintillion) all the way to Ce (centillion).
     After the Moonlight Catfish, giant river catfish and

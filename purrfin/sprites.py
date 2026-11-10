@@ -43,6 +43,12 @@ def _profile(shape, t):
     return pts[-1][1], pts[-1][2]
 
 
+def spectrum_colour(t, whiten=0.0):
+    """t = 0 at the tail (violet) ... 1 at the head (red): one smooth, fully bright rainbow"""
+    r, g, b = colorsys.hsv_to_rgb((0.8 * (1 - t)) % 1.0, 0.85, 1.0)
+    return lerp((int(r * 255), int(g * 255), int(b * 255)), (255, 255, 255), whiten)
+
+
 def build_fish(sp, frame):
     L, H = sp["size"]
     shape = sp["shape"]
@@ -166,10 +172,11 @@ def build_fish(sp, frame):
         for p in keys:
             r, g_, b = colorsys.hsv_to_rgb((tmap[p] * 0.9 + vmap[p] * 0.15) % 1.0, 0.45 + 0.2 * (vmap[p] < 0.6), 1.0)
             body[p] = (int(r * 255), int(g_ * 255), int(b * 255))
-    elif pattern == "sunset":            # orange sky on top, pink underneath, and a little sun
+    elif pattern == "sunset":            # one colour on top fading to another underneath, and a little sun
         sun = (ox + int(L * 0.35), int(cy - hh * 0.25))
+        top, bottom = sp.get("grad", ((255, 190, 60), (255, 70, 150)))
         for p in keys:
-            body[p] = lerp((255, 190, 60), (255, 70, 150), min(1.0, vmap[p] * 1.15))
+            body[p] = lerp(top, bottom, min(1.0, vmap[p] * 1.15))
             if (p[0] - sun[0]) ** 2 + (p[1] - sun[1]) ** 2 < 2.2:
                 body[p] = pat
     elif pattern == "opal":              # pearly, with flecks of every colour
@@ -177,6 +184,9 @@ def build_fish(sp, frame):
             if rng.random() < 0.38:
                 r, g_, b = colorsys.hsv_to_rgb(rng.random(), 0.45, 1.0)
                 body[p] = lerp(body[p], (int(r * 255), int(g_ * 255), int(b * 255)), 0.7)
+    elif pattern == "spectrum":          # the whole rainbow, melting smoothly from the tail to the head
+        for p in keys:
+            body[p] = spectrum_colour(tmap[p], 0.18 * (vmap[p] > 0.7))
     elif pattern == "prism":             # bold diagonal bands of every colour
         for p in keys:
             r, g_, b = colorsys.hsv_to_rgb(((p[0] + p[1]) // 2 % 12) / 12, 0.75, 1.0)
@@ -211,6 +221,8 @@ def build_fish(sp, frame):
             if sp["tail"] == "fork" and tt > 0.45 and d < spread * (tt - 0.3) * 0.95:
                 continue
             c = fin_col
+            if pattern == "spectrum":
+                c = spectrum_colour(-0.08 * tt, 0.1)
             if pattern == "raphael" and abs(d - spread * 0.5) < 0.6:
                 c = pat
             fins[(x, y)] = c
@@ -228,7 +240,7 @@ def build_fish(sp, frame):
             top = cy - up * hh
             for y in range(int(top - h), int(top) + 1):
                 if (ox + i, y) not in body:
-                    fins[(ox + i, y)] = dcol
+                    fins[(ox + i, y)] = spectrum_colour(t, 0.12) if pattern == "spectrum" else dcol
     # ---- pectoral / pelvic fin
     px = ox + int(L * 0.62)
     _, dn = _profile(shape, 0.62)
@@ -241,7 +253,8 @@ def build_fish(sp, frame):
     # ---- assemble
     surf = pygame.Surface((W, SH), pygame.SRCALPHA)
     outline_c = {"moon": (210, 225, 255), "galaxy": (150, 120, 230), "rainbow": (120, 90, 170),
-                 "prism": (90, 60, 140), "opal": (150, 150, 190), "sunset": (150, 50, 90)}.get(
+                 "prism": (90, 60, 140), "opal": (150, 150, 190), "sunset": (150, 50, 90),
+                 "spectrum": (70, 40, 120)}.get(
         pattern, dark(sp["body"], 0.42))
     fin_out = dark(sp["fin"], 0.5)
     allpx = set(body) | set(fins)
@@ -285,9 +298,9 @@ def build_fish(sp, frame):
         for k in range(3):
             surf.set_at((nx - k, int(cy - hh * 0.55) - (k % 2)), (*light(sp["body"], 0.5), 255))
 
-    if pattern in ("golden", "moon", "galaxy", "rainbow", "prism", "opal"):
+    if pattern in ("golden", "moon", "galaxy", "rainbow", "prism", "opal", "spectrum"):
         sp_rng = random.Random(sp["id"] + str(frame))
-        for _ in range(5 if pattern == "prism" else 3):
+        for _ in range(5 if pattern in ("prism", "spectrum") else 3):
             p = sp_rng.choice(keys)
             surf.set_at(p, (255, 255, 240, 255))
     return surf, (ox + L / 2, cy)
