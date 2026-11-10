@@ -9,6 +9,7 @@ from . import sprites
 from .ringtree import RingTree
 from .pixfont import PixelFont
 from .version import VERSION
+from .data import MORPHS, MORPHS_BY_ID
 from .data import SEASONAL_SPECIES, SEASONS, RUB_COOLDOWN, LIGHTS, FOODS_BY_ID, FEASTS
 from .data import (SPECIES, SPECIES_BY_ID, FOODS, TOYS, UPGRADES, TOY_MAX_LEVEL, TANK_NAMES, CLUTCHES, THEMES,
                    CLUTCHES_BY_ID,
@@ -564,6 +565,12 @@ class UI:
             y += 4
         return y - y0
 
+    def tag_colour(self, f):
+        m = MORPHS_BY_ID.get(f.get("morph"))
+        if f.get("shiny"):
+            return (255, 170, 230)
+        return _lighten(m["col"], 0.2) if m else TEXT
+
     def friends_section(self, scr, view, y):
         """saved tanks: visit again, swap in a newer code, rename, remove"""
         g, s = self.g, self.g.state
@@ -819,6 +826,10 @@ class UI:
         if f.get("shiny"):
             self.text(scr, "SHINY x2", self.f_small, (255, 150, 230), (rr.right - 12, rr.y + 30), "topright")
         self.text(scr, sp["name"], self.f_small, DIM, (rr.x + 12, rr.y + 30))
+        m = MORPHS_BY_ID.get(f.get("morph"))
+        if m:
+            self.text(scr, f"{m['name']} x{m['mult']:g}", self.f_small, m["col"],
+                      (rr.x + 18 + self.f_small.size(sp["name"])[0], rr.y + 30))
         rows = [("XP", f["xp"] / E.xp_needed(f["lv"]), (150, 130, 250)),
                 ("Full", f["full"] / 100, (240, 170, 80)), ("Happy", f["happy"] / 100, PINK)]
         if f.get("grow"):
@@ -1401,8 +1412,8 @@ class UI:
             if ic.get_width() > 76:
                 ic = pygame.transform.scale(ic, (76, int(ic.get_height() * 76 / ic.get_width())))
             scr.blit(ic, ic.get_rect(center=(rr.x + 40, rr.centery)))
-            self.text(scr, f"{f['name']}  Lv {f['lv']}" + ("  *SHINY*" if f.get("shiny") else ""), self.f_norm,
-                      (255, 170, 230) if f.get("shiny") else TEXT, (rr.x + 84, rr.y + 4))
+            self.text(scr, f"{f['name']}  Lv {f['lv']}" + E.fish_tags(f), self.f_norm, self.tag_colour(f),
+                      (rr.x + 84, rr.y + 4))
             self.button(scr, (rr.right - 230, rr.centery - 13, 92, 26), "Rename",
                         lambda fish=f: g.start_rename(fish), col=TAB, font=self.f_small)
             self.text(scr, f"{sp['name']}  -  +{E.fmt(E.fish_rate(s, f) * gm)}/s", self.f_small, DIM,
@@ -1622,7 +1633,7 @@ class UI:
         self.box(scr, rr, (60, 54, 40))
         ic = sprites.fish_icon(b["sp"], 4, shiny=b.get("shiny", False), look=E.fish_look(b))
         scr.blit(ic, ic.get_rect(center=(rr.x + 70, rr.centery)))
-        self.text(scr, f"{b['name']} the baby {sp['name']}" + ("  *SHINY*" if b.get("shiny") else ""),
+        self.text(scr, f"{b['name']} the baby {sp['name']}" + E.fish_tags(b),
                   self.f_norm, ACC, (rr.x + 150, rr.y + 10))
         self.text(scr, "Your tank is full! Sell this baby, or sell a fish below to make room.", self.f_small,
                   TEXT, (rr.x + 150, rr.y + 34))
@@ -1645,7 +1656,7 @@ class UI:
             self.box(scr, row, BG2)
             fic = sprites.fish_icon(f["sp"], 2, shiny=f.get("shiny", False), look=E.fish_look(f))
             scr.blit(fic, fic.get_rect(center=(row.x + 44, row.centery)))
-            self.text(scr, f"{f['name']}  Lv {f['lv']}" + ("  *SHINY*" if f.get("shiny") else ""), self.f_norm,
+            self.text(scr, f"{f['name']}  Lv {f['lv']}" + E.fish_tags(f), self.f_norm,
                       TEXT, (row.x + 92, row.y + 6))
             self.text(scr, f"{fsp['name']}  -  +{E.fmt(E.fish_rate(s, f) * gm)}/s", self.f_small, DIM,
                       (row.x + 92, row.y + 26))
@@ -1703,7 +1714,8 @@ class UI:
         g, s = self.g, self.g.state
         y0 = y
         n = len(s["dex"])
-        self.text(scr, f"Discovered {n}/{len(SPECIES)}  -  +{3 * n}% scales   Shinies {len(s.get('shinies', []))}",
+        self.text(scr, f"Discovered {n}/{len(SPECIES)}  -  +{3 * n}% scales   Shinies {len(s.get('shinies', []))}"
+                       f"   Colours {len(s.get('morphs_seen', []))}/{len(MORPHS)}",
                   self.f_norm, TEXT, (view.x + 8, y))
         y += 26
         if self.dex_sel and self.dex_sel in s["dex"]:

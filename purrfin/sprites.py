@@ -6,6 +6,7 @@ import random
 import pygame
 
 from .data import SPECIES_BY_ID
+from .data import MORPHS
 
 
 def lerp(a, b, t):
@@ -165,6 +166,21 @@ def build_fish(sp, frame):
         for p in keys:
             r, g_, b = colorsys.hsv_to_rgb((tmap[p] * 0.9 + vmap[p] * 0.15) % 1.0, 0.45 + 0.2 * (vmap[p] < 0.6), 1.0)
             body[p] = (int(r * 255), int(g_ * 255), int(b * 255))
+    elif pattern == "sunset":            # orange sky on top, pink underneath, and a little sun
+        sun = (ox + int(L * 0.35), int(cy - hh * 0.25))
+        for p in keys:
+            body[p] = lerp((255, 190, 60), (255, 70, 150), min(1.0, vmap[p] * 1.15))
+            if (p[0] - sun[0]) ** 2 + (p[1] - sun[1]) ** 2 < 2.2:
+                body[p] = pat
+    elif pattern == "opal":              # pearly, with flecks of every colour
+        for p in keys:
+            if rng.random() < 0.38:
+                r, g_, b = colorsys.hsv_to_rgb(rng.random(), 0.45, 1.0)
+                body[p] = lerp(body[p], (int(r * 255), int(g_ * 255), int(b * 255)), 0.7)
+    elif pattern == "prism":             # bold diagonal bands of every colour
+        for p in keys:
+            r, g_, b = colorsys.hsv_to_rgb(((p[0] + p[1]) // 2 % 12) / 12, 0.75, 1.0)
+            body[p] = (int(r * 255), int(g_ * 255), int(b * 255))
 
     # ---- eye
     ex = ox + int(L * 0.82)
@@ -224,7 +240,8 @@ def build_fish(sp, frame):
 
     # ---- assemble
     surf = pygame.Surface((W, SH), pygame.SRCALPHA)
-    outline_c = {"moon": (210, 225, 255), "galaxy": (150, 120, 230), "rainbow": (120, 90, 170)}.get(
+    outline_c = {"moon": (210, 225, 255), "galaxy": (150, 120, 230), "rainbow": (120, 90, 170),
+                 "prism": (90, 60, 140), "opal": (150, 150, 190), "sunset": (150, 50, 90)}.get(
         pattern, dark(sp["body"], 0.42))
     fin_out = dark(sp["fin"], 0.5)
     allpx = set(body) | set(fins)
@@ -268,9 +285,9 @@ def build_fish(sp, frame):
         for k in range(3):
             surf.set_at((nx - k, int(cy - hh * 0.55) - (k % 2)), (*light(sp["body"], 0.5), 255))
 
-    if pattern in ("golden", "moon", "galaxy", "rainbow"):
+    if pattern in ("golden", "moon", "galaxy", "rainbow", "prism", "opal"):
         sp_rng = random.Random(sp["id"] + str(frame))
-        for _ in range(3):
+        for _ in range(5 if pattern == "prism" else 3):
             p = sp_rng.choice(keys)
             surf.set_at(p, (255, 255, 240, 255))
     return surf, (ox + L / 2, cy)
@@ -306,12 +323,40 @@ def _nudge(col, tone, hue):
     return tuple(int(x * 255) for x in colorsys.hsv_to_rgb(h, s, v))
 
 
+def _vivid(col, sat=1.45, val=1.12):
+    h, s, v = colorsys.rgb_to_hsv(*(x / 255 for x in col))
+    s = min(1.0, max(s * sat, 0.35 if s > 0.05 else s))
+    return tuple(int(x * 255) for x in colorsys.hsv_to_rgb(h, s, min(1.0, v * val)))
+
+
+def morph_species(s, idx):
+    """a rare colour morph (data.MORPHS, numbered from 1)"""
+    if not idx or idx > len(MORPHS):
+        return s
+    m = MORPHS[idx - 1]
+    s = dict(s)
+    if m["kind"] == "vivid":              # its own colours, turned up, with a golden glow
+        for k in ("body", "belly", "fin", "pat"):
+            s[k] = _vivid(lerp(s[k], m["col"], 0.3), 1.6, 1.15)
+    elif m["kind"] == "tint":
+        for k in ("body", "belly", "fin"):
+            s[k] = _vivid(lerp(s[k], m["col"], 0.55), 1.2, 1.05)
+        s["pat"] = lerp(s["pat"], m["col"], 0.3)
+    else:
+        for k in ("body", "belly", "fin", "pat", "pattern"):
+            if k in m:
+                s[k] = m[k]
+    return s
+
+
 def look_species(sp, look):
-    """apply a fish's personal look: (tone -2..2, hue -1..1, pattern seed 0..3, length -1..1, whiskers 0..3)"""
-    tone, hue, pseed, dlen, whisk = look
+    """apply a fish's personal look: (tone -2..2, hue -1..1, pattern seed 0..3, length -1..1, whiskers 0..3,
+    colour morph 0..)"""
+    tone, hue, pseed, dlen, whisk = look[:5]
     s = dict(sp)
     for k in ("body", "belly", "fin"):
         s[k] = _nudge(s[k], tone, hue)
+    s = morph_species(s, look[5] if len(look) > 5 else 0)
     s["seed"] = f"{sp['id']}-{pseed}"
     L, H = s["size"]
     s["size"] = (max(6, L + dlen), H)
@@ -338,6 +383,10 @@ def _art_colour(sp_id, col, shiny, look):
         return col
     if look:
         col = _nudge(col, look[0], look[1])
+        if len(look) > 5 and 0 < look[5] <= len(MORPHS):
+            m = MORPHS[look[5] - 1]
+            col = _vivid(lerp(col, m["col"], 0.3 if m["kind"] == "vivid" else 0.55), 1.6 if m["kind"] == "vivid" else 1.2,
+                         1.15 if m["kind"] == "vivid" else 1.05)
     if shiny:
         sp = SPECIES_BY_ID[sp_id]
         col = lerp(_rot(col), SHINY_TINTS[sp["tier"] % len(SHINY_TINTS)], 0.45)

@@ -10,6 +10,7 @@ import pygame
 
 from . import economy as E
 from . import winutil
+from .data import MORPHS_BY_ID
 from .data import (SPECIES, SPECIES_BY_ID, FOODS, FOODS_BY_ID, TOYS_BY_ID, UPGRADES_BY_ID, CLUTCHES_BY_ID,
                    MYSTERY_FROM_GOLDEN, MYSTERY_FROM_VISITOR,
                    THEMES_BY_ID, SEASONAL_BY_ID, SEASONS, SKULL_POP_MULT, HAUNTED_POP_MULT,
@@ -168,6 +169,11 @@ class Game:
         for k in ("bill_pearls", "bills_paid", "bill_due"):
             s.pop(k, None)
         s["fish"] = [f for f in s["fish"] if f.get("sp") in SPECIES_BY_ID]
+        for f in s["fish"] + [p for p in s.get("pending", []) if isinstance(p, dict)]:
+            if f.get("morph") not in MORPHS_BY_ID:
+                f.pop("morph", None)
+        s["morphs_seen"] = [m for m in s.get("morphs_seen", []) if m in MORPHS_BY_ID] \
+            if isinstance(s.get("morphs_seen"), list) else []
         for f in s["fish"]:
             # fish renamed before name tags existed: any name that isn't a built-in default counts as named
             if "named" not in f and f.get("name") not in FISH_NAMES:
@@ -1011,6 +1017,7 @@ class Game:
             self.sounds.play("golden", 0, self.now)
         else:
             self.sounds.play("buy", 0, self.now)
+        self.morph_news(f, name)
 
     def buy_upgrade(self, uid):
         self.come_home()
@@ -1095,7 +1102,7 @@ class Game:
                 if a:
                     a.x, a.y, a.levelfx = nx, ny - 6, 2.0
                 self.toast(f"A baby {name} hatched! Say hi to {b['name']}." +
-                           ("  It's SHINY!" if b.get("shiny") else ""), (150, 230, 160), 6)
+                           ("  It's SHINY!" if b.get("shiny") else "") + (f"  It's {MORPHS_BY_ID[b['morph']]['name']}!" if b.get("morph") else ""), (150, 230, 160), 6)
             else:
                 self.toast(f"A baby {name} hatched, but the tank is full!", (255, 200, 150), 6)
         if babies:
@@ -1122,7 +1129,7 @@ class Game:
                    (255, 150, 230))
         elif out["mystery"] == "baby" and b:
             msg = (f"The Mystery Egg hatched a baby {SPECIES_BY_ID[b['sp']]['name']}!" +
-                   ("  It's SHINY!" if b.get("shiny") else ""), (210, 180, 255))
+                   ("  It's SHINY!" if b.get("shiny") else "") + (f"  It's {MORPHS_BY_ID[b['morph']]['name']}!" if b.get("morph") else ""), (210, 180, 255))
         if msg:
             self.toast(msg[0], msg[1], 7)
 
@@ -1477,6 +1484,12 @@ class Game:
 
     def rename_friend(self, f):
         self.start_rename({"_friend": f, "name": f["name"], "named": False})
+
+    def morph_news(self, f, name):
+        m = MORPHS_BY_ID.get(f.get("morph"))
+        if m:
+            big = "*** " if m["mult"] >= 2 else ""
+            self.toast(f"{big}A rare {m['name']} {name}! It earns {m['mult']:g}x scales!{big[::-1]}", m["col"], 8)
 
     def start_tank_name(self):
         name = self.state.get("tank_name", "")

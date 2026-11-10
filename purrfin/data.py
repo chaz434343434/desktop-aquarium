@@ -224,26 +224,57 @@ SPECIES = [
          pattern="none", pat=(0, 0, 0), tail="fork", barbel=4,
          habitat="mid", speed=16,
          blurb="Small, pale and dramatic. Only drinks... fish flakes."),
+    # 1.16: bright ones around the Ud price, slotted in between (prices of the others don't change)
+    dict(id="neonglow", name="Neon Glow Catfish", shape="long", size=(17, 7), between=True,
+         body=(40, 235, 255), belly=(200, 255, 255), fin=(255, 70, 220),
+         pattern="stripe_h", pat=(255, 60, 210), tail="fork", barbel=6,
+         habitat="mid", speed=14, purrs=True,
+         blurb="Glows like a sign at night. Never needs a nightlight."),
     dict(id="iridescent", name="Iridescent Shark Catfish", shape="long", size=(22, 8),
          body=(150, 160, 175), belly=(225, 230, 240), fin=(120, 130, 150),
          pattern="sheen", pat=(140, 200, 230), tail="fork", barbel=2,
          habitat="mid", speed=15,
          blurb="Not a shark at all. Shimmers like a soap bubble when it turns."),
+    dict(id="opal", name="Opal Catfish", shape="long", size=(19, 8), between=True,
+         body=(235, 235, 250), belly=(255, 250, 255), fin=(200, 230, 255),
+         pattern="opal", pat=(255, 255, 255), tail="fork", barbel=7,
+         habitat="mid", speed=11, purrs=True,
+         blurb="Every scale flashes a different colour when it turns."),
     dict(id="asianredtail", name="Asian Redtail Catfish", shape="long", size=(22, 8),
          body=(110, 100, 90), belly=(220, 210, 195), fin=(220, 70, 50),
          pattern="redtail", pat=(230, 70, 50), tail="fork", barbel=8,
          habitat="mid", speed=13,
          blurb="Fiery tail, long whiskers, big appetite."),
+    dict(id="sunriseglow", name="Sunrise Glow Catfish", shape="long", size=(20, 8), between=True,
+         body=(255, 150, 70), belly=(255, 215, 120), fin=(255, 80, 150),
+         pattern="sunset", pat=(255, 240, 160), tail="fork", barbel=7,
+         habitat="mid", speed=12, purrs=True,
+         blurb="Orange at the top, pink at the bottom, like the sky at the end of a good day."),
     dict(id="lima", name="Lima Shovelnose", shape="long", size=(22, 5),
          body=(200, 205, 210), belly=(245, 245, 248), fin=(190, 195, 200),
          pattern="stripe_h", pat=(40, 40, 50), tail="fork", barbel=9,
          habitat="bottom", speed=14,
          blurb="A sleek racing stripe with whiskers to match."),
+    dict(id="candy", name="Candy Swirl Catfish", shape="cory", size=(12, 7), between=True,
+         body=(255, 130, 200), belly=(255, 220, 240), fin=(120, 240, 210),
+         pattern="zebra", pat=(140, 255, 220), tail="round", barbel=4,
+         habitat="bottom", speed=14, purrs=True,
+         blurb="Striped like a candy cane that went on holiday."),
     dict(id="frogmouth", name="Chocolate Frogmouth", shape="banjo", size=(13, 7),
          body=(110, 70, 45), belly=(170, 130, 95), fin=(95, 60, 40),
          pattern="blotch", pat=(70, 45, 30), tail="round", barbel=2,
          habitat="bottom", speed=5,
          blurb="Mostly mouth. Looks like a chocolate bar that learned to swim."),
+    dict(id="stardust", name="Stardust Catfish", shape="long", size=(21, 9), between=True,
+         body=(30, 70, 170), belly=(80, 150, 230), fin=(120, 240, 255),
+         pattern="galaxy", pat=(255, 245, 160), tail="fork", barbel=8,
+         habitat="mid", speed=10, purrs=True,
+         blurb="A little bit of the night sky that learned to swim."),
+    dict(id="novaburst", name="Nova Burst Catfish", shape="long", size=(22, 9), between=True,
+         body=(255, 200, 80), belly=(255, 245, 200), fin=(255, 90, 60),
+         pattern="prism", pat=(255, 255, 255), tail="fork", barbel=9,
+         habitat="mid", speed=11, purrs=True,
+         blurb="Every colour at once, as bright as it can possibly be."),
     dict(id="piraiba", name="Piraiba Catfish", shape="long", size=(28, 10),
          body=(120, 130, 135), belly=(225, 228, 230), fin=(100, 110, 115),
          pattern="dots", pat=(70, 75, 80), tail="fork", barbel=6,
@@ -521,12 +552,28 @@ SPECIES_RATEG = 3.0
 COPY_GROWTH = 1.55       # each extra copy of the same species costs this much more
 
 _cost = SPECIES_COST0
-for _i, _s in enumerate(SPECIES):
-    _s["tier"] = _i
+_ladder = [_s for _s in SPECIES if not _s.get("between")]
+for _i, _s in enumerate(_ladder):              # the main ladder: these prices never change
     _s["rate"] = SPECIES_RATE0 * SPECIES_RATEG ** _i
     if _i > 1:
         _cost *= next(g for upto, g in SPECIES_GROWTH if _i <= upto)
     _s["cost"] = 10 if _i == 0 else _cost
+# species marked between=True slot in between their neighbours, evenly spaced on the way up
+_i = 0
+while _i < len(SPECIES):
+    if SPECIES[_i].get("between"):
+        _j = _i
+        while SPECIES[_j].get("between"):
+            _j += 1
+        _a, _b, _n = SPECIES[_i - 1], SPECIES[_j], _j - _i
+        for _k in range(_n):
+            _f = (_k + 1) / (_n + 1)
+            SPECIES[_i + _k]["cost"] = _a["cost"] * (_b["cost"] / _a["cost"]) ** _f
+            SPECIES[_i + _k]["rate"] = _a["rate"] * (_b["rate"] / _a["rate"]) ** _f
+        _i = _j
+    _i += 1
+for _i, _s in enumerate(SPECIES):
+    _s["tier"] = _i
 
 SPECIES_BY_ID = {s["id"]: s for s in SPECIES}
 
@@ -812,6 +859,29 @@ MYSTERY_EGG = dict(id="mystery", name="Mystery Egg", mins=20, gift=1800, levels=
 CLUTCHES_BY_ID = {c["id"]: c for c in CLUTCHES + [MYSTERY_EGG]}
 MYSTERY_FROM_GOLDEN = 0.10     # chance a golden bubble drops a Mystery Egg
 MYSTERY_FROM_VISITOR = 0.25    # chance a visitor leaves one
+# ---------------------------------------------------------------- colour morphs
+# Any regular catfish can hatch or arrive in a rare colour, and earns more for it. Rarer = bigger bonus.
+# Keep this list's order (new ones go on the end): saves and tank codes store the id, drawing uses the position.
+# kind: "vivid" = its own colours, brighter. "tint" = washed with a colour. "pattern" = a whole new look.
+MORPHS = [
+    dict(id="bright", name="Bright", mult=1.1, chance=0.04, kind="vivid", col=(255, 240, 120)),
+    dict(id="rosy", name="Rosy", mult=1.2, chance=0.03, kind="tint", col=(255, 110, 190)),
+    dict(id="ocean", name="Ocean", mult=1.3, chance=0.02, kind="tint", col=(40, 200, 255)),
+    dict(id="lime", name="Lime", mult=1.4, chance=0.015, kind="tint", col=(170, 255, 60)),
+    dict(id="sunset", name="Sunset", mult=1.5, chance=0.01, kind="pattern", col=(255, 140, 90),
+         pattern="sunset", body=(255, 150, 70), belly=(255, 215, 120), fin=(255, 80, 150), pat=(255, 240, 160)),
+    dict(id="neon", name="Neon", mult=1.75, chance=0.006, kind="pattern", col=(40, 255, 210),
+         pattern="stripe_h", body=(40, 255, 210), belly=(210, 255, 245), fin=(255, 60, 220), pat=(255, 60, 220)),
+    dict(id="galaxy", name="Galaxy", mult=2.0, chance=0.0035, kind="pattern", col=(150, 110, 255),
+         pattern="galaxy", body=(40, 30, 90), belly=(90, 60, 150), fin=(110, 80, 200), pat=(255, 250, 220)),
+    dict(id="rainbow", name="Rainbow", mult=2.5, chance=0.0015, kind="pattern", col=(255, 120, 220),
+         pattern="rainbow", pat=(255, 255, 255), fin=(255, 110, 210), belly=(255, 240, 250)),
+    dict(id="prism", name="Prismatic", mult=3.0, chance=0.0005, kind="pattern", col=(255, 255, 255),
+         pattern="prism", pat=(255, 255, 255), fin=(120, 240, 255), belly=(255, 255, 255)),
+]
+MORPHS_BY_ID = {m["id"]: m for m in MORPHS}
+MORPH_INDEX = {m["id"]: i + 1 for i, m in enumerate(MORPHS)}       # 0 = no morph
+
 GOLDEN_EGG_SHINY = 5           # babies from Golden Eggs are this many times likelier to be shiny
 
 # ---------------------------------------------------------------- tank themes

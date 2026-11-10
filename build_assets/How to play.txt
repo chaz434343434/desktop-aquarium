@@ -1,4 +1,4 @@
-DESKTOP AQUARIUM  (version 1.15.1)
+DESKTOP AQUARIUM  (version 1.16.0)
 A cozy catfish aquarium that lives at the bottom of your screen.
 
 STARTING IT
@@ -52,6 +52,9 @@ WHEN YOU COME BACK
     a baby catfish hatches too! It starts as a tiny fry and grows up over a few minutes. Small Eggs can also hatch nothing at all.
   - If a baby hatches and your tank is full, you must sell a fish (or the baby) to continue.
   - Golden Eggs are 5x as likely to hatch a SHINY baby.
+  - Rare colours: now and then a catfish arrives in a special colour that earns more. From the
+    most common to the rarest: Bright x1.1, Rosy x1.2, Ocean x1.3, Lime x1.4, Sunset x1.5,
+    Neon x1.75, Galaxy x2, Rainbow x2.5 and Prismatic x3. A shiny can be a rare colour too.
   - Golden bubbles and visitors sometimes drop a Mystery Egg. Lay it and see what hatches!
   - The Auto-Nest upgrade lays your eggs again for you after they hatch. Switch it off in the
     Hatchery tab to pick different eggs, or press the x on an egg to take it out of the nest.
@@ -82,8 +85,8 @@ THE LONG GAME
   - The Ring Tree has six branches growing out from the Spring. You can only see a ring once
     you've bought the one before it, so buy one to find out where that branch goes. Drag to
     look around, scroll to zoom, and click a ring to see what it does.
-  - There are 100 catfish to collect, including the Blue Channel Catfish, drawn by a friend.
-    Number 100 is the Infinity Catfish. Prices count up through names like Dc (decillion),
+  - There are 106 catfish to collect, including the Blue Channel Catfish, drawn by a friend.
+    The last one is the Infinity Catfish. Prices count up through names like Dc (decillion),
     Vg (vigintillion), Tg (trigintillion) all the way to Ce (centillion).
     After the Moonlight Catfish, giant river catfish and
     mythical ones (Aurora, Galaxy) appear, along with late-game toys and upgrades that unlock

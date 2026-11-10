@@ -7,7 +7,7 @@ import re
 import zlib
 
 from . import economy as E
-from .data import SPECIES_BY_ID, TOYS_BY_ID, THEMES_BY_ID, TOY_MAX_LEVEL
+from .data import SPECIES_BY_ID, TOYS_BY_ID, THEMES_BY_ID, TOY_MAX_LEVEL, MORPHS_BY_ID
 
 PREFIX = "DA1:"
 MAX_FISH = 80
@@ -21,7 +21,7 @@ def encode(s):
     fish = []
     for f in s["fish"][:MAX_FISH]:
         fish.append([f["sp"], 1 if f.get("shiny") else 0, list(E.fish_look(f))[:4],
-                     f["name"] if f.get("named") else "", int(f.get("lv", 1))])
+                     f["name"] if f.get("named") else "", int(f.get("lv", 1)), f.get("morph", "")])
     d = {"v": 1, "n": s.get("tank_name", ""), "th": s.get("theme", "classic"),
          "pl": E.ulv(s, "plants"), "cd": E.ulv(s, "conditioner"), "f": fish,
          "t": {tid: [v["lv"], round(v.get("x", 0.5), 3)] for tid, v in s["toys"].items()}}
@@ -120,6 +120,8 @@ def decode(text, settings):
         vs["fish"].append(dict(uid=n + 1, sp=f[0], name=name or SPECIES_BY_ID[f[0]]["name"], named=bool(name),
                                lv=_int(f[4], 1, 9999, 1), xp=0.0, full=90.0, happy=90.0, shiny=bool(f[1]),
                                look=look))
+        if len(f) > 5 and f[5] in MORPHS_BY_ID:
+            vs["fish"][-1]["morph"] = f[5]
     toys = d.get("t") if isinstance(d.get("t"), dict) else {}
     for tid, v in list(toys.items())[:len(TOYS_BY_ID)]:
         if tid in TOYS_BY_ID and isinstance(v, list) and len(v) == 2:

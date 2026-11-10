@@ -6,6 +6,7 @@ import random
 import time
 
 from .data import SPAWN_MIN, PEARL_BASE, PEARL_STEP
+from .data import MORPHS, MORPHS_BY_ID, MORPH_INDEX
 from .data import (SPECIES, SPECIES_BY_ID, FOODS_BY_ID, TOYS, TOYS_BY_ID, UPGRADES_BY_ID, CLUTCHES_BY_ID,
                    THEMES_BY_ID, SHINY_CHANCE, PEARL_TREE_BY_ID, GOLDEN_EGG_SHINY,
                    TANK_CAPACITY, TOY_LEVEL_GROWTH, COPY_GROWTH, FISH_NAMES,
@@ -31,7 +32,7 @@ def new_state(keep=None):
     )
     if keep:
         for k in ("pearls", "spawns", "dex", "settings", "stats", "earned_total", "themes", "theme", "shinies",
-                  "tree", "spots", "mystery", "seasonal_owned", "tank_name", "friends", "online"):
+                  "tree", "spots", "mystery", "seasonal_owned", "tank_name", "friends", "online", "morphs_seen"):
             if k in keep:
                 s[k] = keep[k]
         # pearl tree perks that shape a new season
@@ -43,7 +44,7 @@ def new_state(keep=None):
             s["upgrades"]["filter"] = 3 * tlv(s, "seasoned")
         if tlv(s, "keeptoys"):
             s["toys"] = {k: dict(v) for k, v in keep.get("toys", {}).items()}
-    add_fish(s, "sunflower", name="Sunny", shiny=False)
+    add_fish(s, "sunflower", name="Sunny", shiny=False, morph="")
     for _ in range(tlv(s, "buddy")):
         if len(s["fish"]) < capacity(s):
             add_fish(s, "sunflower")
@@ -91,18 +92,43 @@ def random_look(seed=None):
 
 
 def fish_look(f):
-    """full look tuple for drawing, including whiskers that grow with age (every 10 levels, up to +3)"""
+    """full look tuple for drawing: the fish's own look, whiskers that grow with age (every 10 levels, up to +3)
+    and its colour morph (0 = none)"""
     if not f.get("look"):
         f["look"] = random_look(f.get("uid", 0) * 7919)
-    return tuple(f["look"]) + (min(3, f["lv"] // 10),)
+    return tuple(f["look"][:4]) + (min(3, f["lv"] // 10), MORPH_INDEX.get(f.get("morph"), 0))
+
+
+def roll_morph():
+    """most fish come in their normal colours; now and then a rare one"""
+    r = random.random()
+    for m in MORPHS:
+        if r < m["chance"]:
+            return m["id"]
+        r -= m["chance"]
+    return ""
+
+
+def morph_mult(f):
+    m = MORPHS_BY_ID.get(f.get("morph"))
+    return m["mult"] if m else 1.0
+
+
+def fish_tags(f):
+    """'  *SHINY*  Galaxy x2' for labels"""
+    out = "  *SHINY*" if f.get("shiny") else ""
+    m = MORPHS_BY_ID.get(f.get("morph"))
+    if m:
+        out += f"  {m['name']} x{m['mult']:g}"
+    return out
 
 
 def shiny_chance(s):
     return SHINY_CHANCE + 0.005 * ulv(s, "lucky") + 0.01 * tlv(s, "shiny") + 0.01 * ulv(s, "bait")
 
 
-def add_fish(s, sp_id, name=None, shiny=None):
-    f = make_fish(s, sp_id, name, shiny)
+def add_fish(s, sp_id, name=None, shiny=None, morph=None):
+    f = make_fish(s, sp_id, name, shiny, morph)
     s["fish"].append(f)
     if sp_id in SEASONAL_BY_ID:
         if sp_id not in s.setdefault("seasonal_owned", []):
@@ -182,7 +208,7 @@ def rub_cooldown(s):
     return max(20, RUB_COOLDOWN - 8 * tlv(s, "scratch"))
 
 
-def make_fish(s, sp_id, name=None, shiny=None):
+def make_fish(s, sp_id, name=None, shiny=None, morph=None):
     """a new fish dict (not yet in the tank)"""
     taken = {f["name"] for f in s["fish"]}
     if name is None:
@@ -194,6 +220,12 @@ def make_fish(s, sp_id, name=None, shiny=None):
              look=random_look(s["next_uid"]))
     if shiny and sp_id not in s.setdefault("shinies", []):
         s["shinies"].append(sp_id)
+    if morph is None:
+        morph = "" if sp_id in SEASONAL_BY_ID else roll_morph()
+    if morph:
+        f["morph"] = morph
+        if morph not in s.setdefault("morphs_seen", []):
+            s["morphs_seen"].append(morph)
     s["next_uid"] += 1
     return f
 
@@ -319,7 +351,7 @@ def fish_rate(s, f):
     young = 0.25 + 0.75 * growth(f)      # babies earn more as they grow
     base = sp["rate"] * sp["best_mult"] * best_regular_rate(s) if sp.get("season") else sp["rate"]
     return (base * level_mult(f["lv"]) * happy_mult(s, f["happy"]) * hunger_mult(f["full"]) * shiny
-            * young)
+            * young * morph_mult(f))
 
 
 def toy_bonus(s):

@@ -23,16 +23,17 @@ def check(name, cond):
     ok &= bool(cond)
 
 
-check("100 catfish", len(SPECIES) == 100)
+check("106 catfish", len(SPECIES) == 106)
 ids = [sp["id"] for sp in SPECIES]
-check("all different", len(set(ids)) == 100 and len({sp["name"] for sp in SPECIES}) == 100)
+check("all different", len(set(ids)) == 106 and len({sp["name"] for sp in SPECIES}) == 106)
 check("no catfish shares an id with an upgrade", not (set(ids) & set(UPGRADES_BY_ID)))
-check("#100 is the Infinity Catfish", SPECIES[99]["name"] == "Infinity Catfish")
+check("the last one is the Infinity Catfish", SPECIES[-1]["name"] == "Infinity Catfish")
 costs = [sp["cost"] for sp in SPECIES]
 rates = [sp["rate"] for sp in SPECIES]
 check("every catfish costs more than the last", all(b > a for a, b in zip(costs, costs[1:])))
 check("and earns more", all(b > a for a, b in zip(rates, rates[1:])))
-late = [costs[i + 1] / costs[i] for i in range(41, 99)]
+ladder = [sp["cost"] for sp in SPECIES if not sp.get("between")]       # (1.16's bright extras sit in between)
+late = [ladder[i + 1] / ladder[i] for i in range(41, 99)]
 check("after the Blue Channel, prices grow a steady x3.6 per catfish", all(abs(x - 3.6) < 1e-9 for x in late))
 check(f"the top price is a normal number ({E.fmt(costs[-1])})", costs[-1] < 1e100 and not E.fmt(costs[-1]).startswith("MAX"))
 for sp in SPECIES:

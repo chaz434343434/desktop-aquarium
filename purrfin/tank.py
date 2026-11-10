@@ -1033,7 +1033,7 @@ class Tank:
             if int(t * 2) % 2:
                 s.set_at((int(v["x"]), int(v["y"]) - 9), (255, 240, 140))
         for a in self.fish.values():
-            if a.f.get("shiny") and int(t * 3 + a.phase) % 2 == 0:
+            if (a.f.get("shiny") or a.f.get("morph") in ("rainbow", "prism")) and int(t * 3 + a.phase) % 2 == 0:
                 L = a.sp["size"][0]
                 ang = t * 3 + a.phase
                 s.set_at((int(a.x + math.cos(ang) * L / 2), int(a.y - 3 + math.sin(ang * 1.7) * 2)), (255, 255, 230))
