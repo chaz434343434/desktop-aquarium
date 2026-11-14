@@ -86,6 +86,7 @@ class UI:
         self.content_h = 0
         self.view_h = 0
         self.rings = RingTree(self)
+        self.press = None             # web: a finger down on a button or menu (tap or scroll, we'll see)
         self.animate = os.environ.get("SDL_VIDEODRIVER") != "dummy"    # automated tests want the finished picture
         self.clock = time.monotonic
         self.shown_panel = None       # the panel on screen last frame
@@ -186,6 +187,17 @@ class UI:
             self.g.stop_search()                  # clicked away from the search box: stop typing
         if self.scroll_click(pos):
             return True
+        if self.g.web and button == 1:
+            # touch screens: a button works when the finger lifts off it, so a drag can scroll instead
+            for rect, cb in reversed(self.hits):
+                if rect.collidepoint(pos):
+                    self.press = dict(cb=cb, rect=rect, start=pos, moved=False, key=(self.panel, self.tab),
+                                      base=self.scroll.get((self.panel, self.tab), 0))
+                    return True
+            if self.panel and self.panel != "rings" and self.panel_rect and self.panel_rect.collidepoint(pos):
+                self.press = dict(cb=None, rect=None, start=pos, moved=False, key=(self.panel, self.tab),
+                                  base=self.scroll.get((self.panel, self.tab), 0))
+                return True
         for rect, cb in reversed(self.hits):
             if rect.collidepoint(pos):
                 cb()
@@ -199,6 +211,21 @@ class UI:
         if self.panel_rect and self.panel_rect.collidepoint(pos):
             return True
         return False
+
+    def press_drag(self, pos):
+        """a finger moving after touching a menu: past a few pixels it's a scroll, not a tap"""
+        p, pr = self.ui_pos(pos), self.press
+        dy = p[1] - pr["start"][1]
+        if not pr["moved"] and abs(p[0] - pr["start"][0]) + abs(dy) > 10:
+            pr["moved"] = True
+        if pr["moved"] and pr["key"] == (self.panel, self.tab):
+            mx = max(0, self.content_h - self.view_h)
+            self.scroll[pr["key"]] = int(max(0, min(mx, pr["base"] - dy)))
+
+    def release(self, pos):
+        pr, self.press = self.press, None
+        if pr and pr["cb"] and not pr["moved"] and pr["rect"].inflate(16, 16).collidepoint(self.ui_pos(pos)):
+            pr["cb"]()
 
     def drag_to(self, pos):
         pos = self.ui_pos(pos)
@@ -268,6 +295,9 @@ class UI:
         self.hits = []
         self.tips = []
         g = self.g
+        if self.upright_phone():
+            self.hits, self.tips = [], []
+            return self.draw_turn_sideways(scr)
         if g.minimized or g.visiting:
             self.shown_panel = self.closing = None
         if g.minimized:
@@ -315,6 +345,8 @@ class UI:
     def draw_tank_grip(self, scr):
         """a handle on top of the tank, there when the mouse is near. Dragging empty water works too."""
         r = self.tank
+        if self.g.web:                    # the web version fills the page: nothing to move or stretch
+            return
         grip = pygame.Rect(r.centerx - 34, r.y + 1, 68, 14)
         self.tank_grip = grip
         carrying = bool(self.g.tank_move or self.g.tank_stretch)
@@ -360,6 +392,32 @@ class UI:
     # ---- panels slide open and shut, like a drawer coming out from behind the buttons
     PANEL_OPEN = 0.15
     PANEL_CLOSE = 0.11
+
+    def phone(self):
+        """the web version on a screen too short for menus above the tank"""
+        return self.g.web and self.H < 560
+
+    def upright_phone(self):
+        return self.g.web and self.H > self.W * 1.15
+
+    def draw_turn_sideways(self, scr):
+        """phones held upright: the menus need the width, so ask for the phone to be turned"""
+        scr.fill((14, 20, 34))
+        cx, cy = self.W // 2, self.H // 2
+        phone = pygame.Rect(0, 0, 60, 100)
+        phone.center = (cx - 50, cy - 60)
+        side = pygame.Rect(0, 0, 100, 60)
+        side.center = (cx + 60, cy - 60)
+        for rr, col in ((phone, (90, 100, 130)), (side, (120, 220, 160))):
+            pygame.draw.rect(scr, col, rr, 4, border_radius=8)
+        pygame.draw.polygon(scr, (255, 214, 90), [(cx - 6, cy - 72), (cx + 6, cy - 60), (cx - 6, cy - 48)])
+        y = cy + 10
+        for ln in self.wrap("Turn your phone sideways to play", self.f_big, self.W - 40):
+            self.text(scr, ln, self.f_big, ACC, (cx, y), "midtop")
+            y += 32
+        for ln in self.wrap("Your fish are still swimming! (and earning)", self.f_norm, self.W - 40):
+            self.text(scr, ln, self.f_norm, DIM, (cx, y + 6), "midtop")
+            y += 22
 
     def big_panel(self):
         """the Ring Tree needs the whole screen, for as long as it's on it"""
@@ -494,8 +552,11 @@ class UI:
                                    ["Visit a friend's tank", "Copy their tank code first,", "then press this"]),
                                   ("Copy tank code", g.copy_tank_code, NAV,
                                    ["Copy your tank code", "Send it to a friend so they", "can look at your tank"]),
-                                  ("Take photo", g.take_photo, GOOD, ["Take a photo", "Saved in Pictures >", "Desktop Aquarium"]),
+                                  ("Take photo", g.take_photo, GOOD, ["Take a photo", "Saved in Pictures >", "Desktop Aquarium"])
+                                  if not g.web else ("", None, None, None),
                                   ("Name", g.start_tank_name, NAV, ["Name your tank", "Shown on a plaque on the front"])):
+            if not lab:
+                continue
             w = self.f_small.size(lab)[0] + 20
             bx -= w
             self.button(scr, (bx, y + 2, w, 28), lab, cb, col=col, font=self.f_small, tip=tip)
@@ -690,7 +751,8 @@ class UI:
         row1_end = x + (STRIP_H + 4 if nxt else 0)
         # ---- row 2: menu buttons on the right
         bx = r.right - 4
-        specs = [("x", g.quit, 30, BAD, "Save & quit"), ("_", self.minimize, 30, NAV, "Hide tank"),
+        specs = [] if g.web else [("x", g.quit, 30, BAD, "Save & quit"), ("_", self.minimize, 30, NAV, "Hide tank")]
+        specs += [
                  ("Options", lambda: self.open("settings"), None, NAV, None),
                  ("Chill", g.toggle_chill, None, (60, 120, 190) if s["chill"] else NAV,
                   ["Chill mode", "Hunger & happiness stop draining", "No pop-bubbles (no pressure)"]),
@@ -980,16 +1042,22 @@ class UI:
             self.panel_begin(scr, rr)
             self.rings.draw(scr, rr)
             return
-        w = min(800, self.W - 8)
-        if g.ui_below:
+        if self.phone():                  # a short phone screen: the menu covers everything, like an app
+            self.hits, self.tips = [], []
+            w = min(800, self.W - 8)
+            rr = pygame.Rect(0, 0, w, self.H - 8)
+            rr.midtop = (self.W // 2, 4)
+        elif g.ui_below:
+            w = min(800, self.W - 8)
             top = r.bottom + 4
             rr = pygame.Rect(max(4, r.right - w), top, w, min(450, self.H - top - 6))
         else:
+            w = min(800, self.W - 8)
             bottom = self.hud_top() - 4
             h = min(450, bottom - 6)
             rr = pygame.Rect(max(4, r.right - w), bottom - h, w, h)
         pp = g.state["settings"].get("panel_pos")
-        if pp:
+        if pp and not self.phone():
             rr.topleft = pp
         rr.clamp_ip(scr.get_rect())
         self.panel_rect = rr
@@ -1776,39 +1844,40 @@ class UI:
             self.button(scr, (x, y, w, 28), lab, cb, col=GOOD if on else NAV)
 
         X = view.x + 170
-        label("Tank width")
-        sb(X, 34, "-", lambda: g.change_setting("width", max(0.2, round(st["width"] - 0.05, 2))))
-        self.text(scr, f"{int(st['width'] * 100)}%", self.f_norm, ACC, (X + 70, y + 14), "center")
-        sb(X + 106, 34, "+", lambda: g.change_setting("width", min(1.0, round(st["width"] + 0.05, 2))))
-        y += 36
-        label("Position")
-        for i, a in enumerate(("left", "center", "right")):
-            sb(X + i * 86, 80, a.title(), lambda a=a: g.change_setting("align", a), st["align"] == a and not g.tank_pos())
-        self.text(scr, "or drag the tank anywhere", self.f_small, DIM, (X + 3 * 86 + 6, y + 8))
-        y += 36
-        label("Pixel size")
-        for i, (lab, v) in enumerate((("Small", 2), ("Medium", 3), ("Large", 4))):
-            sb(X + i * 86, 80, lab, lambda v=v: g.change_setting("scale", v), st["scale"] == v)
-        y += 36
-        label("Opacity")
-        sb(X, 34, "-", lambda: g.change_setting("opacity", max(120, st["opacity"] - 15)))
-        self.text(scr, f"{int(st['opacity'] / 2.55)}%", self.f_norm, ACC, (X + 70, y + 14), "center")
-        sb(X + 106, 34, "+", lambda: g.change_setting("opacity", min(255, st["opacity"] + 15)))
-        y += 36
-        from . import winutil
-        mons = winutil.monitors()
-        cur = st.get("monitor", -1)
-        cur = 0 if cur < 0 or cur >= len(mons) else cur
-        label("Monitor")
-        sb(X, 34, "<", lambda: g.change_setting("monitor", (cur - 1) % len(mons)))
-        self.text(scr, f"{cur + 1} / {len(mons)}" + ("  (main)" if mons[cur]["primary"] else ""), self.f_norm, ACC,
-                  (X + 100, y + 14), "center")
-        sb(X + 166, 34, ">", lambda: g.change_setting("monitor", (cur + 1) % len(mons)))
-        y += 36
-        label("Always on top")
-        sb(X, 80, "On", lambda: g.change_setting("topmost", True), st["topmost"])
-        sb(X + 86, 80, "Off", lambda: g.change_setting("topmost", False), not st["topmost"])
-        y += 36
+        if not g.web:                     # window-only settings
+            label("Tank width")
+            sb(X, 34, "-", lambda: g.change_setting("width", max(0.2, round(st["width"] - 0.05, 2))))
+            self.text(scr, f"{int(st['width'] * 100)}%", self.f_norm, ACC, (X + 70, y + 14), "center")
+            sb(X + 106, 34, "+", lambda: g.change_setting("width", min(1.0, round(st["width"] + 0.05, 2))))
+            y += 36
+            label("Position")
+            for i, a in enumerate(("left", "center", "right")):
+                sb(X + i * 86, 80, a.title(), lambda a=a: g.change_setting("align", a), st["align"] == a and not g.tank_pos())
+            self.text(scr, "or drag the tank anywhere", self.f_small, DIM, (X + 3 * 86 + 6, y + 8))
+            y += 36
+            label("Pixel size")
+            for i, (lab, v) in enumerate((("Small", 2), ("Medium", 3), ("Large", 4))):
+                sb(X + i * 86, 80, lab, lambda v=v: g.change_setting("scale", v), st["scale"] == v)
+            y += 36
+            label("Opacity")
+            sb(X, 34, "-", lambda: g.change_setting("opacity", max(120, st["opacity"] - 15)))
+            self.text(scr, f"{int(st['opacity'] / 2.55)}%", self.f_norm, ACC, (X + 70, y + 14), "center")
+            sb(X + 106, 34, "+", lambda: g.change_setting("opacity", min(255, st["opacity"] + 15)))
+            y += 36
+            from . import winutil
+            mons = winutil.monitors()
+            cur = st.get("monitor", -1)
+            cur = 0 if cur < 0 or cur >= len(mons) else cur
+            label("Monitor")
+            sb(X, 34, "<", lambda: g.change_setting("monitor", (cur - 1) % len(mons)))
+            self.text(scr, f"{cur + 1} / {len(mons)}" + ("  (main)" if mons[cur]["primary"] else ""), self.f_norm, ACC,
+                      (X + 100, y + 14), "center")
+            sb(X + 166, 34, ">", lambda: g.change_setting("monitor", (cur + 1) % len(mons)))
+            y += 36
+            label("Always on top")
+            sb(X, 80, "On", lambda: g.change_setting("topmost", True), st["topmost"])
+            sb(X + 86, 80, "Off", lambda: g.change_setting("topmost", False), not st["topmost"])
+            y += 36
         label("Sound")
         sb(X, 80, "On", lambda: g.change_setting("sound", True), st["sound"])
         sb(X + 86, 80, "Off", lambda: g.change_setting("sound", False), not st["sound"])
@@ -1823,24 +1892,33 @@ class UI:
         sb(X + 172, 150, "Water + music", lambda: g.change_setting("ambience", "music"), amb == "music")
         self.text(scr, "(soft background sounds)", self.f_small, DIM, (X + 332, y + 6))
         y += 36
-        label("Updates")
-        sb(X, 80, "On", lambda: g.change_setting("autoupdate", True), st.get("autoupdate", True))
-        sb(X + 86, 80, "Off", lambda: g.change_setting("autoupdate", False), not st.get("autoupdate", True))
-        self.button(scr, (X + 172, y, 210, 28), "Check for updates", g.check_updates, col=GOOD,
-                    tip=["Check for updates", "Looks on GitHub for a newer version right now"])
-        ustate = {"checking": "checking...", "none": "up to date", "available": "update ready!",
-                  "downloading": "downloading...", "error": "failed",
-                  "offline": "offline"}.get(g.updater.state, "")
-        if not g.updater.enabled:
-            ustate = "no update source set"
-        self.text(scr, f"v{VERSION}  {ustate}", self.f_small, DIM, (X + 392, y + 6))
-        y += 36
-        label("UI size")
-        cur_k = float(st.get("uiscale", 1.0))
-        for i, kk in enumerate(UI_SCALES):
-            sb(X + i * 86, 80, f"{int(kk * 100)}%", lambda kk=kk: g.change_setting("uiscale", kk), cur_k == kk)
-        self.text(scr, "(bigger text and buttons)", self.f_small, DIM, (X + 268, y + 6))
-        y += 36
+        if not g.web:
+            label("Updates")
+            sb(X, 80, "On", lambda: g.change_setting("autoupdate", True), st.get("autoupdate", True))
+            sb(X + 86, 80, "Off", lambda: g.change_setting("autoupdate", False), not st.get("autoupdate", True))
+            self.button(scr, (X + 172, y, 210, 28), "Check for updates", g.check_updates, col=GOOD,
+                        tip=["Check for updates", "Looks on GitHub for a newer version right now"])
+            ustate = {"checking": "checking...", "none": "up to date", "available": "update ready!",
+                      "downloading": "downloading...", "error": "failed",
+                      "offline": "offline"}.get(g.updater.state, "")
+            if not g.updater.enabled:
+                ustate = "no update source set"
+            self.text(scr, f"v{VERSION}  {ustate}", self.f_small, DIM, (X + 392, y + 6))
+            y += 36
+        if g.web:                         # the save lives in this browser: a code to keep it safe
+            label("Backup")
+            self.button(scr, (X, y, 200, 28), "Copy backup code", g.copy_backup, col=GOOD,
+                        tip=["Copy backup code", "Keep it somewhere safe in case", "this browser's data is cleared"])
+            self.button(scr, (X + 210, y, 200, 28), "Restore from code", g.restore_backup, col=NAV,
+                        tip=["Restore from code", "Paste a backup code to get", "that tank back"])
+            y += 36
+        if not g.web:                     # the web version already sizes everything to the screen
+            label("UI size")
+            cur_k = float(st.get("uiscale", 1.0))
+            for i, kk in enumerate(UI_SCALES):
+                sb(X + i * 86, 80, f"{int(kk * 100)}%", lambda kk=kk: g.change_setting("uiscale", kk), cur_k == kk)
+            self.text(scr, "(bigger text and buttons)", self.f_small, DIM, (X + 268, y + 6))
+            y += 36
         label("Brightness")
         bnow = int(st.get("brightness", 0))
         sb(X, 34, "-", lambda: g.change_setting("brightness", max(-5, bnow - 1)))
@@ -1885,10 +1963,11 @@ class UI:
                 g.reset_save()
             else:
                 self.confirm = ("reset",)
-        self.button(scr, (view.x + 12, y, 140, 30), "Save & Quit", g.quit, col=GOOD)
-        self.button(scr, (view.x + 370, y, 200, 30), "Reset panel spot", self.reset_panel_pos, col=NAV)
-        self.button(scr, (view.x + 160, y, 200, 30), "Really erase everything?" if conf else "Reset save", reset,
-                    col=BAD)
+        if not g.web:                     # a browser tab has nothing to quit, and its menus don't move
+            self.button(scr, (view.x + 12, y, 140, 30), "Save & Quit", g.quit, col=GOOD)
+            self.button(scr, (view.x + 370, y, 200, 30), "Reset panel spot", self.reset_panel_pos, col=NAV)
+        self.button(scr, (view.x + (12 if g.web else 160), y, 200, 30), "Really erase everything?" if conf else "Reset save",
+                    reset, col=BAD)
         y += 44
         st_ = g.state["stats"]
         help_ = ["HOW TO PLAY",

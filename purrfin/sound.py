@@ -2,6 +2,7 @@
 import array
 import math
 import random
+import sys
 import threading
 
 import pygame
@@ -180,7 +181,10 @@ class Ambience:
         if missing:
             if not self.busy:
                 self.busy = True
-                threading.Thread(target=self._make, args=(missing,), daemon=True).start()
+                if sys.platform == "emscripten":          # no threads in the browser
+                    self._make(missing)
+                else:
+                    threading.Thread(target=self._make, args=(missing,), daemon=True).start()
             return
         for name in need:
             if name not in self.snd:

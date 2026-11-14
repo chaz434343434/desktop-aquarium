@@ -2,12 +2,42 @@
 Windows: transparent, click-through, always-on-top, non-activating overlay (Win32 via ctypes).
 macOS / others: there's no colour-key transparency, so the game uses a compact window that sits
 just around the tank (see Game.layout); here we only place it, keep it on top and set its opacity."""
-import ctypes
 import os
 import sys
 
+try:
+    import ctypes
+except ImportError:                   # the web version's Python may not have it
+    ctypes = None
+
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
+IS_WEB = sys.platform == "emscripten"
+WEB_SIZE = [1280, 720]        # the web version's canvas, in game pixels (the page scales it to fit)
+
+
+def web_page_size():
+    """the browser page's size, or None outside a browser"""
+    if not IS_WEB:
+        return None
+    try:
+        import platform
+        return int(platform.window.innerWidth), int(platform.window.innerHeight)
+    except Exception:
+        return None
+
+
+def fit_web_size(page):
+    """a canvas the same shape as the page, its short side 720 game pixels. True if it changed."""
+    w, h = page
+    if w <= 0 or h <= 0:
+        return False
+    k = max(1.0, 340 / min(w, h))              # tiny screens: a little room to breathe, scaled to fit
+    size = [min(2400, int(w * k)) // 2 * 2, min(2400, int(h * k)) // 2 * 2]
+    if size == WEB_SIZE:
+        return False
+    WEB_SIZE[:] = size
+    return True
 COMPACT = not IS_WIN          # no see-through window: keep the window just around the tank
 if IS_WIN:
     from ctypes import wintypes as wt
@@ -59,6 +89,8 @@ if IS_WIN:
 
 def monitors():
     """list of dicts: x,y,w,h (work area) and primary flag; primary first."""
+    if IS_WEB:
+        return [dict(x=0, y=0, w=WEB_SIZE[0], h=WEB_SIZE[1], primary=True)]
     if not IS_WIN:
         return _other_monitors()
     out = []

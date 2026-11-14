@@ -180,6 +180,89 @@ def main(argv=None):
         pygame.quit()
 
 
+HOLD_SECS = 0.6       # a finger held still this long counts as a right-click
+
+
+def handle_event(g, e):
+    if e.type == pygame.QUIT:
+        g.quit()
+    elif e.type == pygame.MOUSEBUTTONDOWN and e.button in (1, 2, 3):
+        g.ui.set_mouse(e.pos)
+        g.mouse_down(e.pos, e.button)
+        if g.web and e.button == 1:
+            g.hold = [e.pos, g.now, False]
+    elif e.type == pygame.MOUSEBUTTONUP:
+        g.mouse_up(e.pos, e.button)
+        g.hold = None
+        if g.web and getattr(e, "touch", False):
+            g.mouse_leave()                        # no mouse to hover with: hide the tips again
+    elif e.type == pygame.MOUSEMOTION:
+        g.mouse_motion(e.pos, e.rel, e.buttons)
+        if g.hold and abs(e.pos[0] - g.hold[0][0]) + abs(e.pos[1] - g.hold[0][1]) > 12:
+            g.hold = None                          # it's a drag, not a hold
+    elif e.type == pygame.MOUSEWHEEL:
+        g.ui.wheel(pygame.mouse.get_pos(), e.y)
+    elif e.type == pygame.WINDOWLEAVE:
+        g.mouse_leave()
+    elif e.type == pygame.KEYDOWN:
+        g.key_down(e)
+    elif e.type == pygame.TEXTINPUT:
+        g.text_input(e.text)
+
+
+async def run_web():
+    """the browser version (built with pygbag): same game, but the page needs control back every frame"""
+    import asyncio
+    pygame.init()
+    page = winutil.web_page_size()
+    if page:
+        winutil.fit_web_size(page)
+    g = Game()
+    g.apply_window(first=True)
+    clock = pygame.time.Clock()
+    saved_t = 0.0
+    turn_t = 0.0
+    try:                                             # add ?debug to the address to log taps to the console
+        import platform as _pf
+        debug = "debug" in str(_pf.window.location.search)
+
+        def log(msg):
+            _pf.window.console.log(msg)
+    except Exception:
+        debug = False
+
+        def log(msg):
+            pass
+    while True:
+        dt = min(0.3, clock.tick(30) / 1000)
+        turn_t += dt
+        if turn_t >= 0.5:                            # the phone was turned round: fit the new shape
+            turn_t = 0.0
+            page = winutil.web_page_size()
+            if page and winutil.fit_web_size(page):
+                g.relayout()
+        for e in pygame.event.get():
+            if e.type != pygame.QUIT:                # closing the tab is the only way to quit
+                if debug and e.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.FINGERDOWN,
+                                        pygame.FINGERUP):
+                    log(f"{pygame.event.event_name(e.type)} {getattr(e, 'pos', '')} b={getattr(e, 'button', '')} "
+                        f"touch={getattr(e, 'touch', '')} press={'yes' if g.ui.press else 'no'} panel={g.ui.panel}")
+                handle_event(g, e)
+                if debug and e.type == pygame.MOUSEBUTTONDOWN:
+                    log(f"  after down: press={g.ui.press and (g.ui.press['rect'], g.ui.press['moved'])}")
+        g.update(dt)
+        if g.hold and not g.hold[2] and g.now - g.hold[1] >= HOLD_SECS and not g.ui.press:
+            g.hold[2] = True                       # held long enough on the tank: same as a right-click there
+            g.mouse_down(g.hold[0], 3)
+        g.draw()
+        g.present()
+        saved_t += dt
+        if saved_t >= 10:                            # a tab can be closed any moment: save often
+            saved_t = 0.0
+            g.save()
+        await asyncio.sleep(0)
+
+
 def run_loop(g, args, crash_after=0.0):
     clock = pygame.time.Clock()
     pacer = Pacer()
@@ -195,23 +278,7 @@ def run_loop(g, args, crash_after=0.0):
         if crash_after and t >= crash_after:
             raise RuntimeError("test crash (DA_CRASH_AFTER)")
         for e in pygame.event.get():
-            if e.type == pygame.QUIT:
-                g.quit()
-            elif e.type == pygame.MOUSEBUTTONDOWN and e.button in (1, 2, 3):
-                g.ui.set_mouse(e.pos)
-                g.mouse_down(e.pos, e.button)
-            elif e.type == pygame.MOUSEBUTTONUP:
-                g.mouse_up(e.pos, e.button)
-            elif e.type == pygame.MOUSEMOTION:
-                g.mouse_motion(e.pos, e.rel, e.buttons)
-            elif e.type == pygame.MOUSEWHEEL:
-                g.ui.wheel(pygame.mouse.get_pos(), e.y)
-            elif e.type == pygame.WINDOWLEAVE:
-                g.mouse_leave()
-            elif e.type == pygame.KEYDOWN:
-                g.key_down(e)
-            elif e.type == pygame.TEXTINPUT:
-                g.text_input(e.text)
+            handle_event(g, e)
         g.update(dt)
         g.draw()
         if args.shots or args.script:

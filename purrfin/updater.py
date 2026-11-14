@@ -31,7 +31,7 @@ EXE_NAME = "DesktopAquarium.exe"
 IS_MAC = sys.platform == "darwin"
 APP_NAME = "Desktop Aquarium.app"
 # tests can point this at a local server
-API = os.environ.get("DA_UPDATE_API") or (
+API = "" if sys.platform == "emscripten" else os.environ.get("DA_UPDATE_API") or (
     f"https://api.github.com/repos/{UPDATE_REPO}/releases/latest" if UPDATE_REPO else "")
 ALLOWED_HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 

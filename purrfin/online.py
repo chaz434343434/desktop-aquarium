@@ -4,7 +4,11 @@ import json
 import os
 import queue
 import re
-import ssl
+import sys
+try:
+    import ssl
+except ImportError:
+    ssl = None
 import threading
 import urllib.error
 import urllib.request
@@ -21,6 +25,8 @@ ID = re.compile(r"^[1-9][0-9]{5}$")
 
 
 def base_url():
+    if sys.platform == "emscripten":                     # the web version talks to it another way (not yet)
+        return ""
     url = os.environ.get("DA_ONLINE_URL")
     if url:
         return url.rstrip("/")
@@ -30,6 +36,8 @@ def base_url():
 
 
 def ssl_context():
+    if ssl is None:
+        return None
     if certifi:
         try:
             return ssl.create_default_context(cafile=certifi.where())

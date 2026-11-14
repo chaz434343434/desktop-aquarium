@@ -8,3 +8,5 @@ test_save.json
 *.spec
 node_modules/
 .wrangler/
+build_web/
+server/pages/public/play/

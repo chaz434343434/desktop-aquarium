@@ -96,6 +96,11 @@ async function handle(request, env) {
   const url = new URL(request.url);
   const ip = request.headers.get("cf-connecting-ip") || "local";
   const parts = url.pathname.split("/").filter(Boolean);
+  if (env.ASSETS && parts[0] === "play") {
+    // the web version of the game (only the pages.dev copy has these files)
+    if (url.pathname === "/play") return Response.redirect(url.origin + "/play/", 301);
+    return env.ASSETS.fetch(request);
+  }
   if (parts.length === 0 && request.method === "GET") {
     // anyone can open this in a browser to see whether their network can reach the server
     return new Response("Desktop Aquarium's tank server is working, and this network can reach it.\n", {

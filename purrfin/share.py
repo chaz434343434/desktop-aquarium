@@ -72,6 +72,39 @@ def _unpack(text):
     return d, packed[:len(packed) - len(dec.unused_data)]
 
 
+BACKUP = "DAS1:"
+
+
+def backup_code(state):
+    """the whole save as one piece of text, to keep somewhere safe (the web version's save lives in the browser)"""
+    raw = json.dumps(state, separators=(",", ":")).encode("utf-8")
+    return BACKUP + base64.urlsafe_b64encode(zlib.compress(raw, 9)).decode("ascii").rstrip("=")
+
+
+def read_backup(text):
+    """a save from a backup code, or None if it isn't one"""
+    i = (text or "").find(BACKUP)
+    if i < 0:
+        return None
+    body = ""
+    for ch in text[i + len(BACKUP):]:
+        if ch.isalnum() or ch in "-_":
+            body += ch
+        elif not ch.isspace():                 # line breaks inside the code are fine; anything else ends it
+            break
+    for trim in range(4):                      # words typed after the code: the packed data ignores extra
+        part = body[:len(body) - trim]         # bytes, but the letters can misalign the text decoding
+        try:
+            dec = zlib.decompressobj()
+            raw = dec.decompress(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)), 5_000_000)
+            s = json.loads(raw.decode("utf-8"))
+        except Exception:
+            continue
+        if isinstance(s, dict) and isinstance(s.get("fish"), list) and s["fish"]:
+            return s
+    return None
+
+
 def clean_code(text):
     """the code on its own, exactly as encode() wrote it, so the same tank always matches itself"""
     _, used = _unpack(text)

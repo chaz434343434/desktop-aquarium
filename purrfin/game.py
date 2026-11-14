@@ -10,6 +10,7 @@ import pygame
 
 from . import economy as E
 from . import winutil
+from . import webstore
 from .data import MORPHS_BY_ID
 from .data import (SPECIES, SPECIES_BY_ID, FOODS, FOODS_BY_ID, TOYS_BY_ID, UPGRADES_BY_ID, CLUTCHES_BY_ID,
                    MYSTERY_FROM_GOLDEN, MYSTERY_FROM_VISITOR,
@@ -38,6 +39,8 @@ STRIP_H = 30
 
 
 def default_save_path():
+    if webstore.WEB:
+        return "/save.json"              # only a name: the web version keeps its save in the browser
     if sys.platform == "darwin":
         base = os.path.expanduser("~/Library/Application Support")
     else:
@@ -54,6 +57,8 @@ def default_save_path():
 class Game:
     def __init__(self, save_path=None, monitor=None, fresh=False):
         self.save_path = save_path or default_save_path()
+        self.web = webstore.WEB
+        self.hold = None              # web: [position, when, done] while a finger is held down
         self.state = None
         self.last_backup = 0.0         # 0 = make a backup on the first save
         self.restored_from = None      # set if the save was damaged and a backup was loaded instead
@@ -186,8 +191,12 @@ class Game:
     @staticmethod
     def read_save(path):
         try:
-            with open(path, "r", encoding="utf-8") as fh:
-                s = json.load(fh)
+            if webstore.WEB:
+                text = webstore.read("save")
+                s = json.loads(text) if text else None
+            else:
+                with open(path, "r", encoding="utf-8") as fh:
+                    s = json.load(fh)
         except (OSError, ValueError):
             return None
         return s if isinstance(s, dict) and isinstance(s.get("fish"), list) else None
@@ -196,8 +205,15 @@ class Game:
         """written to a temp file, flushed to the disk, then swapped in: a power cut halfway through
         can't leave a half-written save. Every 5 minutes it's also copied to a backup."""
         self.state["last_time"] = time.time()
-        os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
         data = json.dumps(self.state)
+        if webstore.WEB:
+            webstore.write("save", data)
+            now = time.time()
+            if now - self.last_backup >= BACKUP_EVERY:
+                self.last_backup = now
+                webstore.write("backup", data)
+            return
+        os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
         tmp = self.save_path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
             fh.write(data)
@@ -294,7 +310,24 @@ class Game:
         except (TypeError, ValueError, IndexError):
             return None
 
+    def web_layout(self):
+        """the web version: the whole page is the game. Tank along the bottom, everything else above it."""
+        m = winutil.monitors()[0]
+        self.mon = m
+        st = self.state["settings"]
+        self.S = 3 if m["h"] >= 620 else 2          # phones: a smaller tank, so the menus have room
+        tw = m["w"] // self.S * self.S
+        th = TANK_H * self.S
+        self.win_x = self.win_y = 0
+        self.win_w, self.win_h = m["w"], m["h"]
+        self.ui_below = False
+        self.tank_rect = pygame.Rect((m["w"] - tw) // 2, m["h"] - th, tw, th)
+        self.view = pygame.Rect(0, 0, m["w"], m["h"])
+        st["uiscale"] = 1.0
+
     def layout(self):
+        if self.web:
+            return self.web_layout()
         st = self.state["settings"]
         mons = winutil.monitors()
         pos = self.tank_pos()
@@ -388,7 +421,7 @@ class Game:
         return self.win_x + p[0], self.win_y + p[1]
 
     def begin_tank_move(self):
-        if self.visiting or self.minimized:
+        if self.visiting or self.minimized or self.web:
             return
         self.ui.panel = None
         self.ui.confirm = None
@@ -416,7 +449,7 @@ class Game:
 
     def begin_tank_stretch(self, side):
         """pull the left or right edge of the tank to change its width"""
-        if self.visiting or self.minimized:
+        if self.visiting or self.minimized or self.web:
             return
         self.ui.panel = None
         self.ui.confirm = None
@@ -492,6 +525,8 @@ class Game:
                 from . import sprites
                 pygame.display.set_icon(pygame.transform.scale(sprites.fish_icon("sunflower", 1), (32, 18)))
             self.screen = pygame.display.set_mode(size, pygame.NOFRAME)
+            if self.web:
+                webstore.refit()
             pygame.display.set_caption("Desktop Aquarium")
             self.hwnd = pygame.display.get_wm_info().get("window")
             winutil.style_overlay(self.hwnd, KEY, 0, st["topmost"])
@@ -635,7 +670,10 @@ class Game:
         url = (f"https://github.com/{UPDATE_REPO}/issues/new?"
                + urllib.parse.urlencode({"title": title, "body": body}))
         try:
-            webbrowser.open(url)
+            if self.web:
+                platform.window.open(url, "_blank")
+            else:
+                webbrowser.open(url)
             self.toast("Opened GitHub in your browser. Write what happened and press Create!", (200, 220, 255), 6)
         except Exception:
             self.toast(f"Couldn't open the browser. Go to github.com/{UPDATE_REPO}/issues", (255, 170, 150), 8)
@@ -891,6 +929,7 @@ class Game:
             self.tank_press = self.screen_mouse()       # empty water: dragging from here picks up the tank
 
     def mouse_up(self, pos, button):
+        self.ui.release(pos)
         self.ui.drag = None
         self.ui.sb_drag = None
         self.ui.rings.release()
@@ -926,6 +965,9 @@ class Game:
         if self.ui.over_panel(pos) or self.to_low(pos):
             self.note_input()
         self.ui.set_mouse(pos)
+        if self.ui.press and buttons[0]:
+            self.ui.press_drag(pos)
+            return
         if self.tank_move or self.tank_stretch:
             self.mouse_low = None
             return
@@ -1223,8 +1265,39 @@ class Game:
             winutil.open_folder(folder)
         return path
 
+    def copy_backup(self):
+        """web version: the whole save as a code, to keep somewhere safe"""
+        self.save()
+        webstore.ask("Your backup code. Copy all of it and keep it somewhere safe "
+                     "(a note or an email to yourself):", share.backup_code(self.state))
+
+    def restore_backup(self, text=None):
+        """web version: replace this tank with the one in a backup code"""
+        if text is None:
+            text = webstore.ask("Paste your backup code. This replaces the tank you have now.", "")
+            if text is None:
+                return False
+        s = share.read_backup(text)
+        if s is None:
+            self.deny("That isn't a backup code. It starts with DAS1:")
+            return False
+        webstore.write("save", json.dumps(s))
+        self.state = self.load()
+        self.state["settings"]["tank_pos"] = None
+        self.tank.state = self.state
+        self.tank.build_static()
+        self.tank.sync()
+        self.sounds.settings = self.state["settings"]
+        self.relayout()
+        self.save()
+        self.toast("Tank restored from your backup code!", (150, 230, 160), 6)
+        return True
+
     def copy_tank_code(self):
         code = share.encode(self.state)
+        if self.web:
+            webstore.ask("Your tank code. Copy it and send it to a friend:", code)
+            return code
         if winutil.set_clipboard(code):
             self.toast("Tank code copied! Paste it to a friend so they can visit your tank.", (150, 230, 160), 6)
         else:
@@ -1232,7 +1305,9 @@ class Game:
         return code
 
     def visit_from_clipboard(self):
-        text = winutil.get_clipboard()
+        text = webstore.ask("Paste your friend's tank code here:", "") if self.web else winutil.get_clipboard()
+        if text is None:
+            return None
         if ONLINE_ID.match((text or "").strip()):
             return self.visit_online(text.strip())
         return self.visit(text)
@@ -1253,6 +1328,9 @@ class Game:
 
     def copy_short_code(self):
         me = self.state.get("online")
+        if me and self.web:
+            webstore.ask("Your tank code:", me["id"])
+            return
         if me and winutil.set_clipboard(me["id"]):
             self.toast(f"Copied {me['id']}!", (150, 230, 160), 3)
 
@@ -1500,6 +1578,21 @@ class Game:
         self.stop_search()                  # typing goes to the name now, not the Shop search box
         self.renaming = f
         self.rename_text = f["name"]
+        if self.web:                        # the phone's own text box and keyboard
+            if f.get("_code"):
+                title = "Type your friend's 6-digit tank code"
+            elif f.get("_friend"):
+                title = "Name this friend"
+            elif f.get("_tank"):
+                title = "Name your tank (leave empty for no name)"
+            else:
+                title = f"Name your {SPECIES_BY_ID[f['sp']]['name']} (leave empty to remove its name)"
+            answer = webstore.ask(title, f["name"])
+            if answer is None:
+                return self.finish_rename(False)
+            self.rename_text = ""
+            self.text_input(answer.strip())
+            return self.finish_rename(True)
         self.prev_fg = winutil.foreground()
         winutil.set_activatable(self.hwnd, True)
         pygame.key.start_text_input()
@@ -1556,6 +1649,14 @@ class Game:
             return
         if self.renaming is not None:
             self.finish_rename(False)
+        if self.web:
+            answer = webstore.ask("Search the Shop", self.ui.search)
+            if answer is not None:
+                self.ui.search = ""
+                self.searching = True
+                self.text_input(answer.strip())
+                self.searching = False
+            return
         self.searching = True
         self.prev_fg = winutil.foreground()
         winutil.set_activatable(self.hwnd, True)
