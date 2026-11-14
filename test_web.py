@@ -175,6 +175,115 @@ g.relayout()
 g.draw()
 check("turned back: the game is back", not g.ui.upright_phone() and g.ui.hits)
 
+# ---- 6-digit tank codes through the browser's fetch (a pretend server answers)
+from purrfin import online  # noqa: E402
+
+online.WEB = True
+TANKS, KEYS, SENT, PENDING = {}, {}, [], {}
+LATER = []                      # answers that arrive a frame later, like a real network
+MODE = ["ok"]
+
+
+def server(method, url, body, key):
+    parts = url.strip("/").split("/")
+    if MODE[0] == "down":
+        return {"s": 0}
+    if MODE[0] == "garbage":
+        return {"s": 200, "t": "<html>"}
+    tid = parts[2] if len(parts) > 2 else None
+    if method == "POST" and len(parts) == 2:
+        tid = str(482913 + len(TANKS))
+        TANKS[tid] = json.loads(body)["code"]
+        KEYS[tid] = "ab" * 32
+        return {"s": 201, "t": json.dumps({"id": tid, "key": KEYS[tid]})}
+    if tid not in TANKS:
+        return {"s": 404, "t": "{}"}
+    if len(parts) == 4 and parts[3] == "close":
+        if key != KEYS[tid]:
+            return {"s": 403, "t": "{}"}
+        TANKS[tid] = ""
+        return {"s": 200, "t": "{}"}
+    if method == "GET":
+        return {"s": 200, "t": json.dumps({"code": TANKS[tid]})} if TANKS[tid] else {"s": 404, "t": "{}"}
+    if key != KEYS[tid]:
+        return {"s": 403, "t": "{}"}
+    if method == "PUT":
+        TANKS[tid] = json.loads(body)["code"]
+    return {"s": 200, "t": "{}"}
+
+
+FakeWindow.eval = staticmethod(lambda js: SENT.append(("eval", "daFetch" in js)))
+
+
+def da_fetch(n, method, url, body, key):
+    SENT.append((method, url, body, key))
+    LATER.append((n, json.dumps(server(method, url, body, key))))
+
+
+FakeWindow.daFetch = staticmethod(da_fetch)
+FakeWindow.daTake = staticmethod(lambda n: PENDING.pop(n, None))
+
+
+def network(g, frames=3):
+    """let the pretend network answer, a frame at a time"""
+    for _ in range(frames):
+        while LATER:
+            n, ans = LATER.pop(0)
+            PENDING[n] = ans
+        g.update(0.05)
+
+
+me = new_game()
+me.state["online"] = None
+me.state["tank_name"] = "Phone Tank"
+check("the web version can use the tank server", me.online.enabled)
+me.share_tank()
+check("nothing is answered in the same frame (no freezing)", me.state["online"] is None and me.online.busy)
+network(me)
+mine = me.state["online"]
+check("Open my tank gets a 6-digit code on the phone", mine and mine["id"] == "482913" and mine["open"])
+check("the helper was added to the page once", SENT[0] == ("eval", True) and sum(1 for s in SENT if s[0] == "eval") == 1)
+check("requests go to the same site as the game", SENT[1][0] == "POST" and SENT[1][1] == "/v1/tanks")
+answers.append("482913")
+friend = new_game()
+friend.state["friends"] = []
+friend.start_code_entry()
+network(friend)
+check("a friend on a phone types the code and sees the tank", friend.visiting and friend.visiting["tank_name"] == "Phone Tank"
+      and friend.visit_id == "482913")
+friend.save_friend()
+friend.leave_visit()
+E.add_fish(me.state, "bronze")
+me.sync_t = 0.0
+me.update(0.01)
+network(me)
+check("the phone's tank keeps itself up to date", TANKS["482913"] == share.encode(me.state))
+friend.visit_friend(friend.state["friends"][0])
+network(friend)
+check("saved friends show the latest tank", friend.visiting and len(friend.visiting["fish"]) == len(me.state["fish"]))
+friend.leave_visit()
+me.stop_sharing()
+network(me)
+check("Close my tank works, and the code stays", not me.state["online"]["open"] and me.state["online"]["id"] == "482913")
+put = [s for s in SENT if s[0] == "POST" and s[1].endswith("/close")]
+check("with the secret key sent along", put and put[-1][3] == "ab" * 32)
+for mode, what in (("down", "no internet"), ("garbage", "nonsense reply")):
+    MODE[0] = mode
+    t = new_game()
+    t.state["online"] = None
+    t.toasts.clear()
+    t.share_tank()
+    network(t)
+    check(f"{what}: you're told, nothing breaks", t.state["online"] is None and any("Couldn't reach" in x[0] for x in t.toasts))
+MODE[0] = "ok"
+FakeWindow.daFetch = staticmethod(lambda *a: (_ for _ in ()).throw(RuntimeError("no fetch")))
+t = new_game()
+t.state["online"] = None
+t.share_tank()
+network(t)
+check("a browser without fetch: you're told, nothing breaks", t.state["online"] is None)
+online.WEB = False
+
 if real_platform:
     sys.modules["platform"] = real_platform
 print("ALL PASS" if ok else "SOME FAILED")
