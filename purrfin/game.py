@@ -582,6 +582,7 @@ class Game:
         self.tick_tank_stretch()
         if self.web:
             self.tick_copy()
+            self.tick_modal()
         self.tick_online(dt)
         s = self.state
         s["stats"]["playtime"] += dt
@@ -1271,11 +1272,42 @@ class Game:
         """web version: the whole save as a code, to keep somewhere safe"""
         self.save()
         code = share.backup_code(self.state)
-        self.web_copy(code, f"Backup code copied ({len(code)} letters)! Paste it into a note or an email to yourself.",
-                      "Your backup code. Copy ALL of it and keep it somewhere safe (a note or an email to yourself):")
+        self.open_modal("show", f"Your backup code ({len(code)} letters). Tap Copy, then paste it into a note or "
+                                f"an email to yourself.", code)
+
+    def open_modal(self, kind, title, text="", ok_label="OK"):
+        """web: the long-text box (Chrome's own boxes cut long codes). kind says what to do with the answer."""
+        mode = "show" if kind == "show" else "paste"
+        if webstore.modal(title, text, mode, ok_label):
+            self.modal = kind
+        elif kind != "show":                  # no box possible: fall back to the browser's own
+            answer = webstore.ask(title, text)
+            if answer is not None:
+                self.modal_answer(kind, answer)
+        else:
+            webstore.ask(title, text)
+
+    def tick_modal(self):
+        if not getattr(self, "modal", None):
+            return
+        r = webstore.modal_result()
+        if r is None:
+            return
+        kind, self.modal = self.modal, None
+        ok, text = r
+        if ok and kind != "show":
+            self.modal_answer(kind, text)
+
+    def modal_answer(self, kind, text):
+        if kind == "restore":
+            self.restore_backup(text)
+        elif kind == "visit":
+            self.visit_pasted(text)
 
     def web_copy(self, text, done_msg, fallback_title):
         """put text on the phone's clipboard; if the phone says no, show it in a box to copy by hand"""
+        if len(text) > 200:                   # long: the full-screen box, which never cuts it
+            return self.open_modal("show", fallback_title, text)
         self.copying = None
         if webstore.copy(text):
             self.copying = dict(text=text, done=done_msg, title=fallback_title, t=self.now)
@@ -1297,7 +1329,11 @@ class Game:
     def restore_backup(self, text=None):
         """web version: replace this tank with the one in a backup code"""
         if text is None:
-            text = webstore.ask("Paste your backup code. This replaces the tank you have now.", "")
+            if self.web:
+                self.open_modal("restore", "Paste your backup code below, then press Restore. "
+                                           "This replaces the tank you have now.", "", "Restore")
+                return False
+            text = winutil.get_clipboard()
             if text is None:
                 return False
         s = share.read_backup(text)
@@ -1332,7 +1368,11 @@ class Game:
         return code
 
     def visit_from_clipboard(self):
-        text = webstore.ask("Paste your friend's tank code here:", "") if self.web else winutil.get_clipboard()
+        if self.web:
+            return self.open_modal("visit", "Paste your friend's tank code below, then press Visit.", "", "Visit")
+        return self.visit_pasted(winutil.get_clipboard())
+
+    def visit_pasted(self, text):
         if text is None:
             return None
         if ONLINE_ID.match((text or "").strip()):

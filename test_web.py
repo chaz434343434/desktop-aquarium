@@ -43,6 +43,15 @@ class FakeWindow:
     def eval(js):
         pass
 
+    daModalResult = None
+    modals = []
+    modal_answer = None
+
+    @staticmethod
+    def daModal(title, text, mode, ok):
+        FakeWindow.modals.append((title, text, mode, ok))
+        FakeWindow.daModalResult = FakeWindow.modal_answer
+
     @staticmethod
     def daCopy(text):
         FakeWindow.copied.append(text)
@@ -116,17 +125,14 @@ check(f"a backup code is text ({len(code)} characters)", code.startswith("DAS2-"
 check("it holds the whole tank", share.read_backup(code)["bubbles"] == g.state["bubbles"])
 check("junk isn't a backup", share.read_backup("hello") is None and share.read_backup("DAS1:!!!") is None)
 check("a tank code isn't a backup", share.read_backup(share.encode(g.state)) is None)
-asked.clear()
-FakeWindow.copied.clear()
+FakeWindow.modals.clear()
+FakeWindow.modal_answer = json.dumps({"ok": True, "text": ""})
 g.copy_backup()
 g.update(0.05)
-check("Copy backup code puts the whole code on the clipboard", FakeWindow.copied and share.read_backup(FakeWindow.copied[-1])
-      and not asked and any("copied" in t[0] for t in g.toasts))
-FakeWindow.copy_answer = "fail"
-g.copy_backup()
-g.update(0.05)
-check("if the phone won't allow it, the code is shown to copy by hand", asked and asked[-1][1].startswith("DAS2-"))
-FakeWindow.copy_answer = "ok"
+m = FakeWindow.modals[-1] if FakeWindow.modals else None
+check("Copy backup code opens the full box with the whole code", m and m[2] == "show" and share.read_backup(m[1]))
+check("not Chrome's box, which cuts long text", not [a for a in asked if a[1].startswith("DAS")])
+check("closing the box changes nothing", g.modal is None)
 full = share.backup_code(g.state)
 for cut in (len(full) // 2, len(full) - 1, len(full) - 7, 40):
     check(f"a code cut to {cut} letters is spotted as cut off", share.read_backup(full[:cut]) is None
@@ -137,26 +143,41 @@ broken = full[:200] + ("A" if full[200] != "A" else "B") + full[201:]
 check("a changed letter is spotted", share.read_backup(broken) is None and share.backup_problem(broken) == "cut")
 old = "DAS1:" + full.split("-", 2)[2].rsplit("-", 1)[0]
 check("old DAS1 codes still work", share.read_backup(old) is not None)
-answers.append(full[:len(full) // 2])
-g.toasts.clear()
-g.restore_backup()
-check("restoring half a code says it's cut short", any("cut short" in t[0] for t in g.toasts))
-answers.append("hello")
-g.toasts.clear()
-g.restore_backup()
-check("restoring something else says it isn't one", any("isn't a backup code" in t[0] for t in g.toasts))
+check("Chrome's cut-in-the-middle codes are spotted", share.backup_problem(full[:100] + "..." + full[-100:]) == "cut")
+big = E.new_state()
+for _ in range(60):
+    E.add_fish(big, "bronze")
+bigcode = share.backup_code(big)
+FakeWindow.modals.clear()
+g2b = new_game()
+g2b.state = big
+g2b.copy_backup()
+check(f"even a big tank's code ({len(bigcode)} letters) goes into the box whole",
+      FakeWindow.modals and len(FakeWindow.modals[-1][1]) == len(share.backup_code(g2b.state)))
 other = E.new_state()
 E.earn(other, 9e9)
 E.add_fish(other, "bronze")
-answers.append("here it is: " + share.backup_code(other) + " thanks")
-check("Restore from code brings that tank back", g.restore_backup() and len(g.state["fish"]) == 2
-      and g.state["bubbles"] >= 9e9)
+FakeWindow.modal_answer = json.dumps({"ok": True, "text": "here it is: " + share.backup_code(other) + " thanks"})
+g.restore_backup()
+check("Restore opens the box (nothing replaced yet)", FakeWindow.modals[-1][2] == "paste" and g.modal == "restore")
+g.update(0.05)
+check("pasting in the box brings that tank back", len(g.state["fish"]) == 2 and g.state["bubbles"] >= 9e9)
 check("and saves it", json.loads(store["desktop-aquarium:save"])["bubbles"] >= 9e9)
-answers.append("nonsense")
-before = len(g.state["fish"])
-check("a bad code changes nothing", not g.restore_backup() and len(g.state["fish"]) == before)
-answers.append(None)
-check("cancel changes nothing", not g.restore_backup())
+FakeWindow.modal_answer = json.dumps({"ok": True, "text": full[:len(full) // 2]})
+g.toasts.clear()
+g.restore_backup()
+g.update(0.05)
+check("half a code: says it's cut short, nothing replaced", any("cut short" in t[0] for t in g.toasts) and len(g.state["fish"]) == 2)
+FakeWindow.modal_answer = json.dumps({"ok": False})
+g.restore_backup()
+g.update(0.05)
+check("Cancel changes nothing", len(g.state["fish"]) == 2 and g.modal is None)
+FakeWindow.modal_answer = json.dumps({"ok": True, "text": share.encode(other)})
+g.visit_from_clipboard()
+g.update(0.05)
+check("Visit a tank: paste a long code in the box", g.visiting is not None)
+g.leave_visit()
+FakeWindow.modal_answer = None
 g.ui.panel = "settings"
 labels.clear()
 g.ui.button = lambda scr, rect, label, *a, **k: labels.append(label) or orig(scr, rect, label, *a, **k)
