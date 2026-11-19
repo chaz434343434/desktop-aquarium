@@ -36,6 +36,19 @@ class FakeWindow:
     def window_resize():
         pass
 
+    daCopyResult = None
+    copied = []
+
+    @staticmethod
+    def eval(js):
+        pass
+
+    @staticmethod
+    def daCopy(text):
+        FakeWindow.copied.append(text)
+        FakeWindow.daCopyResult = FakeWindow.copy_answer
+    copy_answer = "ok"
+
     @staticmethod
     def open(url, target):
         asked.append(("open", url))
@@ -99,13 +112,39 @@ check("it loads again next visit", abs(g2.state["bubbles"] - g.state["bubbles"])
 
 # ---- backup codes
 code = share.backup_code(g.state)
-check(f"a backup code is text ({len(code)} characters)", code.startswith("DAS1:") and len(code) < 20000)
+check(f"a backup code is text ({len(code)} characters)", code.startswith("DAS2-") and len(code) < 20000)
 check("it holds the whole tank", share.read_backup(code)["bubbles"] == g.state["bubbles"])
 check("junk isn't a backup", share.read_backup("hello") is None and share.read_backup("DAS1:!!!") is None)
 check("a tank code isn't a backup", share.read_backup(share.encode(g.state)) is None)
 asked.clear()
+FakeWindow.copied.clear()
 g.copy_backup()
-check("Copy backup code shows it to copy", asked and asked[-1][1].startswith("DAS1:"))
+g.update(0.05)
+check("Copy backup code puts the whole code on the clipboard", FakeWindow.copied and share.read_backup(FakeWindow.copied[-1])
+      and not asked and any("copied" in t[0] for t in g.toasts))
+FakeWindow.copy_answer = "fail"
+g.copy_backup()
+g.update(0.05)
+check("if the phone won't allow it, the code is shown to copy by hand", asked and asked[-1][1].startswith("DAS2-"))
+FakeWindow.copy_answer = "ok"
+full = share.backup_code(g.state)
+for cut in (len(full) // 2, len(full) - 1, len(full) - 7, 40):
+    check(f"a code cut to {cut} letters is spotted as cut off", share.read_backup(full[:cut]) is None
+          and share.backup_problem(full[:cut]) == "cut")
+check("a whole code with a line break in it still works", share.read_backup(full[:300] + "\n" + full[300:]))
+check("a code with words around it still works", share.read_backup("here: " + full + " thanks!"))
+broken = full[:200] + ("A" if full[200] != "A" else "B") + full[201:]
+check("a changed letter is spotted", share.read_backup(broken) is None and share.backup_problem(broken) == "cut")
+old = "DAS1:" + full.split("-", 2)[2].rsplit("-", 1)[0]
+check("old DAS1 codes still work", share.read_backup(old) is not None)
+answers.append(full[:len(full) // 2])
+g.toasts.clear()
+g.restore_backup()
+check("restoring half a code says it's cut short", any("cut short" in t[0] for t in g.toasts))
+answers.append("hello")
+g.toasts.clear()
+g.restore_backup()
+check("restoring something else says it isn't one", any("isn't a backup code" in t[0] for t in g.toasts))
 other = E.new_state()
 E.earn(other, 9e9)
 E.add_fish(other, "bronze")
@@ -212,7 +251,7 @@ def server(method, url, body, key):
     return {"s": 200, "t": "{}"}
 
 
-FakeWindow.eval = staticmethod(lambda js: SENT.append(("eval", "daFetch" in js)))
+FakeWindow.eval = staticmethod(lambda js: SENT.append(("eval", "daFetch" in js)) if "daFetch" in js else None)
 
 
 def da_fetch(n, method, url, body, key):

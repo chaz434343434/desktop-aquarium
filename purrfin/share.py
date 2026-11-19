@@ -72,18 +72,54 @@ def _unpack(text):
     return d, packed[:len(packed) - len(dec.unused_data)]
 
 
-BACKUP = "DAS1:"
+BACKUP = "DAS1:"              # the first backup codes (still read)
+BACKUP2 = "DAS2-"             # since then: DAS2-<length>-<data>-<check>, so a cut-off code can be spotted
+
+
+def _check(data):
+    return format(zlib.crc32(data.encode("ascii")) & 0xFFFFF, "05x")
 
 
 def backup_code(state):
     """the whole save as one piece of text, to keep somewhere safe (the web version's save lives in the browser)"""
     raw = json.dumps(state, separators=(",", ":")).encode("utf-8")
-    return BACKUP + base64.urlsafe_b64encode(zlib.compress(raw, 9)).decode("ascii").rstrip("=")
+    data = base64.urlsafe_b64encode(zlib.compress(raw, 9)).decode("ascii").rstrip("=")
+    return f"{BACKUP2}{len(data)}-{data}-{_check(data)}"
+
+
+def backup_problem(text):
+    """why a pasted backup code can't be used: '' (it's fine), 'none' (no code in there) or 'cut' (cut short
+    or changed, usually because only part of it was copied)"""
+    if read_backup(text) is not None:
+        return ""
+    return "cut" if text and (BACKUP in text or BACKUP2 in text) else "none"
+
+
+def _read_backup2(text):
+    i = text.find(BACKUP2)
+    rest = "".join(ch for ch in text[i + len(BACKUP2):] if not ch.isspace())
+    parts = rest.split("-")
+    if len(parts) < 3 or not parts[0].isdigit():
+        return None
+    n = int(parts[0])
+    joined = "-".join(parts[1:])               # the data itself can contain - (it's URL-safe base64)
+    data, check = joined[:n], joined[n + 1:n + 6]
+    if len(data) != n or check != _check(data):
+        return None
+    try:
+        raw = zlib.decompressobj().decompress(base64.urlsafe_b64decode(data + "=" * (-n % 4)), 5_000_000)
+        s = json.loads(raw.decode("utf-8"))
+    except Exception:
+        return None
+    return s if isinstance(s, dict) and isinstance(s.get("fish"), list) and s["fish"] else None
 
 
 def read_backup(text):
     """a save from a backup code, or None if it isn't one"""
-    i = (text or "").find(BACKUP)
+    text = text or ""
+    if BACKUP2 in text:
+        return _read_backup2(text)
+    i = text.find(BACKUP)
     if i < 0:
         return None
     body = ""

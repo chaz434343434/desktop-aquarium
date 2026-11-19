@@ -580,6 +580,8 @@ class Game:
         self.now += dt
         self.tick_tank_move()
         self.tick_tank_stretch()
+        if self.web:
+            self.tick_copy()
         self.tick_online(dt)
         s = self.state
         s["stats"]["playtime"] += dt
@@ -1268,8 +1270,29 @@ class Game:
     def copy_backup(self):
         """web version: the whole save as a code, to keep somewhere safe"""
         self.save()
-        webstore.ask("Your backup code. Copy all of it and keep it somewhere safe "
-                     "(a note or an email to yourself):", share.backup_code(self.state))
+        code = share.backup_code(self.state)
+        self.web_copy(code, f"Backup code copied ({len(code)} letters)! Paste it into a note or an email to yourself.",
+                      "Your backup code. Copy ALL of it and keep it somewhere safe (a note or an email to yourself):")
+
+    def web_copy(self, text, done_msg, fallback_title):
+        """put text on the phone's clipboard; if the phone says no, show it in a box to copy by hand"""
+        self.copying = None
+        if webstore.copy(text):
+            self.copying = dict(text=text, done=done_msg, title=fallback_title, t=self.now)
+        else:
+            webstore.ask(fallback_title, text)
+
+    def tick_copy(self):
+        c = getattr(self, "copying", None)
+        if not c:
+            return
+        r = webstore.copy_result()
+        if r == "ok":
+            self.copying = None
+            self.toast(c["done"], (150, 230, 160), 7)
+        elif r == "fail" or self.now - c["t"] > 3:
+            self.copying = None
+            webstore.ask(c["title"], c["text"])
 
     def restore_backup(self, text=None):
         """web version: replace this tank with the one in a backup code"""
@@ -1279,7 +1302,10 @@ class Game:
                 return False
         s = share.read_backup(text)
         if s is None:
-            self.deny("That isn't a backup code. It starts with DAS1:")
+            if share.backup_problem(text) == "cut":
+                self.deny("That backup code is cut short or changed. Copy all of it, then try again.")
+            else:
+                self.deny("That isn't a backup code. Backup codes start with DAS.")
             return False
         webstore.write("save", json.dumps(s))
         self.state = self.load()
@@ -1296,7 +1322,8 @@ class Game:
     def copy_tank_code(self):
         code = share.encode(self.state)
         if self.web:
-            webstore.ask("Your tank code. Copy it and send it to a friend:", code)
+            self.web_copy(code, "Tank code copied! Paste it to a friend so they can visit your tank.",
+                          "Your tank code. Copy it and send it to a friend:")
             return code
         if winutil.set_clipboard(code):
             self.toast("Tank code copied! Paste it to a friend so they can visit your tank.", (150, 230, 160), 6)
@@ -1329,7 +1356,7 @@ class Game:
     def copy_short_code(self):
         me = self.state.get("online")
         if me and self.web:
-            webstore.ask("Your tank code:", me["id"])
+            self.web_copy(me["id"], f"Copied {me['id']}!", "Your tank code:")
             return
         if me and winutil.set_clipboard(me["id"]):
             self.toast(f"Copied {me['id']}!", (150, 230, 160), 3)
